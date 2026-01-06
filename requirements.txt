@@ -1,0 +1,19 @@
+# Core dependencies for Syd V3
+# Tested on Python 3.8+
+
+# LLM inference
+llama-cpp-python>=0.2.0
+
+# Vector embeddings and search
+sentence-transformers>=2.2.0
+faiss-cpu>=1.7.4
+
+# PyTorch (CPU version)
+torch>=2.0.0
+
+# Model downloads (used by setup.py)
+huggingface-hub>=0.16.0
+
+# Additional dependencies
+numpy>=1.24.0
+transformers>=4.30.0

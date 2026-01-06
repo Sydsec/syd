@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+.venv_qwen_test/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Models (too large for git)
+rag_engine/models/*.gguf
+rag_engine/models/*.bin
+
+# Generated FAISS indexes - INCLUDED in repo (only 6MB, makes setup easier)
+# rag_engine/embeddings/customers/*.faiss
+# rag_engine/embeddings/customers/*.pkl
+
+# Backup files from index regeneration
+rag_engine/embeddings/customers/*.backup
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+output/
+temp/
+
+# Test files
+test_*.py
+*_test.py
+tests/
+
+# User data
+scans/
+dumps/
+exports/
+*.xml
+*.json
+*.zip
+*.mem
+*.dmp
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Windows special device files
+nul

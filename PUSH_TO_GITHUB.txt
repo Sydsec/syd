@@ -1,0 +1,165 @@
+==========================================================
+COMMANDS TO REPLACE V2 WITH V3 ON GITHUB
+==========================================================
+
+IMPORTANT: This will DELETE all V2 code and replace it with V3
+
+Your repo: https://github.com/Sydsec/syd
+
+==========================================================
+STEP 1: Navigate to your Syd V3 folder
+==========================================================
+
+cd C:\Users\pa249\OneDrive\Desktop\Syd_V3
+
+==========================================================
+STEP 2: Initialize Git (if not already done)
+==========================================================
+
+git init
+
+==========================================================
+STEP 3: Add your GitHub repo as remote
+==========================================================
+
+git remote add origin https://github.com/Sydsec/syd.git
+
+# If you get "remote origin already exists", remove it first:
+git remote remove origin
+git remote add origin https://github.com/Sydsec/syd.git
+
+==========================================================
+STEP 4: Add all V3 files
+==========================================================
+
+git add .
+
+==========================================================
+STEP 5: Commit V3 code
+==========================================================
+
+git commit -m "Replace V2 with V3 - Automated setup, 90% accuracy, professional documentation"
+
+==========================================================
+STEP 6: Force push to replace V2 (DESTRUCTIVE!)
+==========================================================
+
+# This will DELETE all V2 code on GitHub and replace with V3
+# Make sure you're ready before running this!
+
+git push -f origin main
+
+# If your branch is named "master" instead of "main":
+git push -f origin master
+
+==========================================================
+STEP 7: Create v3.0.0 Release Tag
+==========================================================
+
+git tag v3.0.0
+git push origin v3.0.0
+
+==========================================================
+DONE!
+==========================================================
+
+Your GitHub repo now has V3 code.
+
+Next steps:
+1. Go to https://github.com/Sydsec/syd
+2. Click "Releases" → "Create a new release"
+3. Choose tag: v3.0.0
+4. Title: "Syd V3.0.0 - Automated Setup & Improved Accuracy"
+5. Description: Copy from RELEASE_NOTES.txt (below)
+
+==========================================================
+RELEASE NOTES FOR GITHUB RELEASE
+==========================================================
+
+## Syd V3.0.0 - Major Release
+
+Complete rewrite with automated setup and significantly improved accuracy.
+
+**What's New:**
+
+🚀 **Automated Setup**
+- Run `python setup.py` and everything installs automatically
+- Downloads Qwen 2.5 14B model (no HuggingFace account needed)
+- FAISS indexes included - no manual generation
+- Setup time: 15-30 minutes total
+
+📊 **Improved Accuracy**
+- Nmap analysis: 96.7% accuracy (29/30 test questions)
+- Volatility forensics: 90% accuracy (9/10 test questions)
+- BloodHound: 85-90% accuracy (being refined)
+
+✨ **Better Architecture**
+- Fact-extraction prevents hallucinations
+- Grounded RAG with validation
+- Precise data extraction (memory addresses, IPs, PIDs)
+- Concise, actionable answers
+
+📚 **Professional Documentation**
+- QUICKSTART.md - 3 steps to get running
+- INSTALL.md - Detailed troubleshooting
+- SUPPORT.md - Community and professional support
+- Clean, technical writing
+
+🔧 **File Size Warnings**
+- BloodHound: Warns if JSON > 100MB
+- Volatility: Warns if pasted output > 20MB
+- Prevents GUI freezing
+
+**Breaking Changes:**
+
+⚠️ **V2 code is no longer available**
+- This is a complete rewrite
+- V2 users should backup before upgrading
+- Different file structure
+- New setup process
+
+**Requirements:**
+
+- Python 3.8+
+- 16GB RAM minimum (24GB recommended)
+- 15GB free disk space
+- Internet (for initial setup only)
+
+**Installation:**
+
+```bash
+git clone https://github.com/Sydsec/syd.git
+cd syd
+python setup.py
+python syd.py
+```
+
+See QUICKSTART.md for detailed instructions.
+
+**Support:**
+
+- GitHub Issues for bugs
+- GitHub Discussions for questions
+- Professional support: info@sydsec.co.uk
+- Pre-configured USB installations available for air-gapped environments
+
+**Known Issues:**
+
+- BloodHound output format being refined per community feedback
+- Large enterprise scans (1000+ hosts) may be slow
+- Context window: 4096 tokens (occasional overflow)
+
+**Next Steps:**
+
+- Test with your own scans
+- Report issues on GitHub
+- Watch tutorials: https://www.youtube.com/@paularmstrong8306
+- Visit: https://sydsec.co.uk
+
+---
+
+Built and tested on real penetration testing data.
+
+**Author:** Paul Armstrong ([@Sydsec](https://github.com/Sydsec))
+
+==========================================================
