@@ -2,24 +2,27 @@
 
 ---
 
-## 🎉 **SYD V3 LAUNCHING NEXT WEEK** 🎉
+## Syd V3 Pro - Launching Next Week
 
-**20% more accurate than V2** - Tested on 119 real-world pentest scenarios:
-- ✅ **Nmap:** 9.1/10 accuracy (up from 7.6/10 in V2)
-- ✅ **BloodHound:** 10.0/10 accuracy (up from 8.5/10 in V2)
-- ✅ **Volatility:** 8.13/10 accuracy (up from 6.8/10 in V2)
-- ✅ **YARA:** 9.84/10 accuracy (up from 8.2/10 in V2)
-- ✅ **Overall:** 9.27/10 (Grade A) across all 4 tools
+**Tested on 119 real-world pentest scenarios with 20% higher accuracy than V2:**
 
-**V3 Pro features:**
-- 💎 One-click installer (no Python setup required)
-- 📧 Email support
-- 🎯 Priority updates
-- 📊 Professional-grade accuracy
+| Tool | V2 Accuracy | V3 Accuracy | Improvement |
+|------|-------------|-------------|-------------|
+| Nmap | 7.6/10 | 9.1/10 | +20% |
+| BloodHound | 8.5/10 | 10.0/10 | +18% |
+| Volatility | 6.8/10 | 8.13/10 | +20% |
+| YARA | 8.2/10 | 9.84/10 | +20% |
+| **Overall** | **7.8/10** | **9.27/10** | **+19%** |
 
-**⭐ Star this repo to get notified when V3 launches + early bird pricing!**
+**V3 Pro includes:**
+- One-click installer (no Python setup required)
+- Email support
+- Priority updates
+- Professionally tested and validated
 
-*V2 (below) remains free forever. V3 Pro coming next week.*
+**Star this repo to get notified when V3 launches.**
+
+V2 (below) remains free and open source. V3 Pro is a commercial upgrade for teams requiring professional-grade accuracy and support.
 
 ---
 
