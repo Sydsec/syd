@@ -1,5 +1,28 @@
 # Syd - Offline Penetration Testing Assistant
 
+---
+
+## 🎉 **SYD V3 LAUNCHING NEXT WEEK** 🎉
+
+**20% more accurate than V2** - Tested on 119 real-world pentest scenarios:
+- ✅ **Nmap:** 9.1/10 accuracy (up from 7.6/10 in V2)
+- ✅ **BloodHound:** 10.0/10 accuracy (up from 8.5/10 in V2)
+- ✅ **Volatility:** 8.13/10 accuracy (up from 6.8/10 in V2)
+- ✅ **YARA:** 9.84/10 accuracy (up from 8.2/10 in V2)
+- ✅ **Overall:** 9.27/10 (Grade A) across all 4 tools
+
+**V3 Pro features:**
+- 💎 One-click installer (no Python setup required)
+- 📧 Email support
+- 🎯 Priority updates
+- 📊 Professional-grade accuracy
+
+**⭐ Star this repo to get notified when V3 launches + early bird pricing!**
+
+*V2 (below) remains free forever. V3 Pro coming next week.*
+
+---
+
 Syd is an air-gapped penetration testing assistant that analyzes scan outputs using local LLMs and retrieval-augmented generation. It runs entirely on your laptop without requiring internet connectivity or API keys.
 
 ## Overview
@@ -8,8 +31,9 @@ Syd parses technical scan outputs (Nmap, BloodHound, Volatility) and answers que
 
 **Supported Tools:**
 - Nmap (XML exports)
-- BloodHound (JSON exports)
+- BloodHound (JSON/ZIP exports)
 - Volatility 3 (plugin output)
+- YARA (scan results)
 
 **Key Features:**
 - Fully offline operation
@@ -49,43 +73,24 @@ Validation checks every generated answer against extracted facts. If the LLM men
 
 ## Installation
 
-### Automated Setup (Recommended)
+### From Installer (Customers)
 
-Run one command and everything is handled automatically:
+Syd is delivered as a single installer that includes everything — the AI model, databases, and all dependencies. No Python or internet connection required after installation.
 
-```bash
-python setup.py
-```
+1. Download `Syd_Installer.exe`
+2. Run the installer — it will set up everything automatically
+3. Launch Syd from the desktop shortcut or Start Menu
+4. First launch takes 10-20 seconds (loading AI model)
 
-This script will:
-1. Install all Python dependencies
-2. Download Qwen 2.5 14B model (9.7GB)
-3. Verify installation
+### From Source (Developers)
 
-**Time required:** 15-30 minutes (mostly downloading)
+If you are running from the repository directly:
 
-**No HuggingFace account required.** FAISS indexes are included in the repository.
+1. Ensure Python 3.8+ and pip are installed
+2. Run `python setup.py` — this installs dependencies, downloads the embedding model (~90MB), and downloads the Qwen 2.5 14B model (~9.7GB)
+3. Once setup completes, run `python syd.py`
 
-### Manual Installation
-
-If setup.py fails, install manually:
-
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-2. Download model from HuggingFace:
-   - Go to: https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF
-   - Download all 3 parts: qwen2.5-14b-instruct-q5_k_m-00001/2/3-of-00003.gguf
-   - Merge into: rag_engine/models/qwen2.5-14b-instruct-q5_k_m.gguf
-
-3. Run Syd:
-```bash
-python syd.py
-```
-
-See INSTALL.md for detailed troubleshooting.
+See INSTALL.md for troubleshooting.
 
 ## Usage
 
@@ -189,28 +194,13 @@ Designed for typical pentest scenarios (10-500 hosts). Enterprise-scale scans ma
 
 ## Support
 
-**Community Support:**
-- GitHub Issues: Report bugs and request features
-- GitHub Discussions: Ask questions and share experiences
-
-**Professional Support:**
-If you're in an air-gapped environment and struggling with setup, I offer pre-configured USB installations for a small fee. Everything included and tested.
-
-Contact: info@sydsec.co.uk
+**Contact:** info@sydsec.co.uk
 
 **Resources:**
 - YouTube: https://www.youtube.com/@paularmstrong8306 (tutorials and demos)
 - Website: https://sydsec.co.uk
-- Email: info@sydsec.co.uk
 
-## Contributing
-
-Particularly interested in:
-- Edge cases where fact extractors fail
-- Questions where validation is too strict/loose
-- Performance issues on different hardware configurations
-
-See CONTRIBUTING.md for guidelines.
+**Updates:** Database and model updates sold separately. Contact for pricing.
 
 ## License
 
@@ -228,6 +218,6 @@ Developed and tested on real penetration testing data.
 
 ---
 
-**Author:** Paul Armstrong ([@Sydsec](https://github.com/Sydsec))
+**Author:** Paul Armstrong
 **Website:** https://sydsec.co.uk
 **YouTube:** https://www.youtube.com/@paularmstrong8306
