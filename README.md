@@ -20,7 +20,7 @@
 - Priority updates
 - Professionally tested and validated
 
-**Star this repo to get notified when V3 launches.**
+**Get early bird pricing:** Post in [Discussions](https://github.com/Sydsec/syd/discussions) to be notified when V3 launches.
 
 V2 (below) remains free and open source. V3 Pro is a commercial upgrade for teams requiring professional-grade accuracy and support.
 
