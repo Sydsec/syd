@@ -2,18 +2,18 @@
 # Tested on Python 3.8+
 
 # LLM inference
-llama-cpp-python>=0.2.0
+llama-cpp-python>=0.3.0,<0.4.0
 
 # Vector embeddings and search
-sentence-transformers>=2.2.0
+sentence-transformers>=2.2.0,<6.0.0
 faiss-cpu>=1.7.4
 
 # PyTorch (CPU version)
-torch>=2.0.0
+torch>=2.0.0,<3.0.0
 
 # Model downloads (used by setup.py)
-huggingface-hub>=0.16.0
+huggingface-hub>=0.16.0,<1.0.0
 
 # Additional dependencies
-numpy>=1.24.0
-transformers>=4.30.0
+numpy>=1.24.0,<3.0.0
+transformers>=4.30.0,<5.0.0
