@@ -2,7 +2,7 @@
 # Tested on Python 3.8+
 
 # LLM inference
-llama-cpp-python>=0.3.0,<0.4.0
+llama-cpp-python==0.3.16
 
 # Vector embeddings and search
 sentence-transformers>=2.2.0,<6.0.0
