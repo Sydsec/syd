@@ -114,7 +114,7 @@ def init_style(root):
     root.configure(bg=BG)
     s = ttk.Style(root)
     try: s.theme_use("clam")
-    except: pass
+    except Exception: pass
     s.configure(".", background=PANEL, foreground=INK)
     s.configure("TFrame", background=PANEL)
     s.configure("TLabel", background=PANEL, foreground=INK)
@@ -485,7 +485,7 @@ class NmapPage(ttk.Frame):
             try:
                 with open(self.config_file, 'r') as f:
                     return {**default_config, **json.load(f)}
-            except:
+            except Exception:
                 return default_config
         return default_config
 
@@ -1326,7 +1326,7 @@ Be concise and actionable."""
 
                         # Add suggestion to answer with clear labeling
                         answer += f"\n\n💡 How to get this info:\n{suggestion}"
-                    except:
+                    except Exception:
                         pass  # If suggestion fails, just show the original answer
 
                 # Remove thinking indicator and show answer
@@ -1497,7 +1497,7 @@ Be concise and actionable."""
             self.txtAskSydMain.delete(self.thinking_text_start, f"{self.thinking_text_start} lineend")
             self.txtAskSydMain.insert(self.thinking_text_start, f"Thinking{dots}")
             self.txtAskSydMain.see(tk.END)
-        except:
+        except Exception:
             pass  # If something goes wrong, just stop animating
 
         # Schedule next animation (every 500ms)
@@ -1512,7 +1512,7 @@ Be concise and actionable."""
             # Delete the thinking message
             if hasattr(self, 'thinking_start'):
                 self.txtAskSydMain.delete(self.thinking_start, tk.END)
-        except:
+        except Exception:
             pass  # If something goes wrong, just continue
 
     def on_analyze_paste(self):
@@ -3483,7 +3483,7 @@ RESPONSE FORMAT:
             self.txt_chat.delete(self.thinking_text_start, f"{self.thinking_text_start} lineend")
             self.txt_chat.insert(self.thinking_text_start, f"Thinking{dots}")
             self.txt_chat.see(tk.END)
-        except:
+        except Exception:
             pass  # If something goes wrong, just stop animating
 
         # Schedule next animation frame
@@ -3498,7 +3498,7 @@ RESPONSE FORMAT:
             # Delete the thinking message
             if hasattr(self, 'thinking_start'):
                 self.txt_chat.delete(self.thinking_start, tk.END)
-        except:
+        except Exception:
             pass  # If something goes wrong, just continue
 
     def append_chat_message(self, sender, message):
@@ -4498,7 +4498,7 @@ RESPONSE FORMAT:
             self.txt_chat.delete(self.thinking_text_start, f"{self.thinking_text_start} lineend")
             self.txt_chat.insert(self.thinking_text_start, f"Thinking{dots}")
             self.txt_chat.see(tk.END)
-        except:
+        except Exception:
             pass  # If something goes wrong, just stop animating
 
         # Schedule next animation (every 500ms)
@@ -4513,7 +4513,7 @@ RESPONSE FORMAT:
             # Delete the thinking message
             if hasattr(self, 'thinking_start'):
                 self.txt_chat.delete(self.thinking_start, tk.END)
-        except:
+        except Exception:
             pass  # If something goes wrong, just continue
 
     def append_chat_message(self, sender, message):
@@ -4586,7 +4586,7 @@ if __name__ == "__main__":
                 "Syd Error",
                 f"An unexpected error occurred:\n\n{exc_type.__name__}: {exc_value}\n\nCheck console for full traceback."
             )
-        except:
+        except Exception:
             pass
 
     # Set global exception handler
