@@ -85,9 +85,19 @@ Examples that work well:
 
 ## Enterprise
 
-Enterprise adds Metasploit and Sliver C2 analysis — useful if you're running red team engagements and want AI help interpreting your framework output without any of it going to a cloud API.
+Enterprise adds Metasploit and Sliver C2 analysis on top of everything in this repo.
 
-Get in touch: info@sydsec.co.uk
+If you're running red team engagements you know the problem — you can't paste session output into ChatGPT because of NDAs and client data. Enterprise gives you the same AI analysis, fully offline, for your MSF sessions and Sliver beacons. Ask what happened, what to pivot to next, what the credentials mean in context.
+
+Get in touch: **info@sydsec.co.uk** or **https://sydsec.co.uk**
+
+---
+
+## Videos and demos
+
+Tutorials and walkthroughs on YouTube: https://www.youtube.com/@paularmstrong8306
+
+Worth watching before you dive in — shows the actual workflow on real pentest data.
 
 ---
 
