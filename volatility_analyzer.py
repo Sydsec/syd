@@ -212,6 +212,577 @@ THREAT_PATTERNS = {
         'severity': 'HIGH',
         'category': 'Anti-Forensics',
         'description': 'Anti-forensics techniques detected'
+    },
+    # ===== Linux-Specific Threats =====
+    'LINUX_CRYPTO_MINER': {
+        'patterns': [
+            r'\b(xmrig|cpuminer|minerd|xmr-stak|ethminer)\b',
+            r'pool\..*\.(com|net):?\d*',
+            r'--url.*pool',
+            r'--donate-level',
+            r'stratum\+tcp://',
+            r'mining.*pool'
+        ],
+        'score': 9,
+        'severity': 'CRITICAL',
+        'category': 'Linux - Cryptocurrency Miner',
+        'description': 'Cryptocurrency mining malware detected'
+    },
+    'LINUX_SSH_BACKDOOR': {
+        'patterns': [
+            r'authorized_keys',
+            r'ssh-rsa\s+AAAA',
+            r'\.ssh/config',
+            r'PermitRootLogin\s+yes',
+            r'/etc/pam\.d/',
+            r'pam_unix\.so.*debug'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'Linux - SSH Backdoor',
+        'description': 'SSH backdoor or unauthorized key detected'
+    },
+    'LINUX_ROOTKIT': {
+        'patterns': [
+            r'\b(diamorphine|suterusu|reptile|vlany)\b',
+            r'insmod.*\.ko',
+            r'/tmp/.*\.ko',
+            r'/dev/shm/.*\.ko',
+            r'LD_PRELOAD.*\.so',
+            r'hidden.*module'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'Linux - Rootkit',
+        'description': 'Linux rootkit kernel module detected'
+    },
+    'LINUX_CONTAINER_ESCAPE': {
+        'patterns': [
+            r'nsenter',
+            r'unshare',
+            r'docker.*--privileged',
+            r'mount.*proc.*host',
+            r'/host/root',
+            r'CVE-2019-5736',
+            r'runc.*exploit'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'Linux - Container Escape',
+        'description': 'Container escape attempt detected'
+    },
+    'LINUX_PERSISTENCE_CRON': {
+        'patterns': [
+            r'crontab\s+-[le]',
+            r'\*/\d+\s+\*\s+\*\s+\*\s+\*',
+            r'/etc/cron\.d/',
+            r'/var/spool/cron',
+            r'@reboot.*(/tmp|/dev/shm)'
+        ],
+        'score': 7,
+        'severity': 'HIGH',
+        'category': 'Linux - Cron Persistence',
+        'description': 'Malware persistence via cron jobs'
+    },
+    'LINUX_PERSISTENCE_SYSTEMD': {
+        'patterns': [
+            r'systemctl\s+enable',
+            r'\.service',
+            r'/etc/systemd/system/',
+            r'/lib/systemd/system/',
+            r'WantedBy=multi-user\.target',
+            r'ExecStart.*(/tmp|/dev/shm)'
+        ],
+        'score': 7,
+        'severity': 'HIGH',
+        'category': 'Linux - Systemd Persistence',
+        'description': 'Malware persistence via systemd service'
+    },
+    'LINUX_WEBSHELL': {
+        'patterns': [
+            r'(c99|r57|b374k|wso)\.php',
+            r'shell\.php',
+            r'system\(\$_GET',
+            r'eval\(\$_POST',
+            r'passthru\(',
+            r'base64_decode.*eval'
+        ],
+        'score': 9,
+        'severity': 'CRITICAL',
+        'category': 'Linux - Web Shell',
+        'description': 'PHP/Python web shell detected'
+    },
+    'LINUX_SUSP_LOCATION': {
+        'patterns': [
+            r'/tmp/\.[a-zA-Z0-9]+',
+            r'/dev/shm/.*',
+            r'/var/tmp/\.[a-zA-Z0-9]+',
+            r'\.hidden/',
+            r'/tmp/.*\.(sh|py|pl|elf)'
+        ],
+        'score': 8,
+        'severity': 'HIGH',
+        'category': 'Linux - Suspicious File Location',
+        'description': 'Executable in suspicious location (/tmp, /dev/shm, hidden directory)'
+    },
+    'LINUX_HISTORY_MANIPULATION': {
+        'patterns': [
+            r'history\s+-c',
+            r'unset\s+HISTFILE',
+            r'HISTSIZE\s*=\s*0',
+            r'rm\s+.*\.bash_history',
+            r'ln\s+-sf\s+/dev/null.*history',
+            r'export\s+HISTFILE=/dev/null'
+        ],
+        'score': 8,
+        'severity': 'HIGH',
+        'category': 'Linux - History Manipulation',
+        'description': 'Attacker clearing command history (anti-forensics)'
+    },
+    # ===== Mac-Specific Threats =====
+    'MAC_ADWARE': {
+        'patterns': [
+            r'\b(shlayer|pirrit|bundlore|adload)\b',
+            r'MacKeeper',
+            r'Advanced\s+Mac\s+Cleaner',
+            r'/Library/Application\s+Support/.*\.app',
+            r'Safari.*extension.*inject'
+        ],
+        'score': 7,
+        'severity': 'HIGH',
+        'category': 'macOS - Adware',
+        'description': 'macOS adware detected'
+    },
+    'MAC_INFOSTEALER': {
+        'patterns': [
+            r'security\s+dump-keychain',
+            r'Keychain.*password',
+            r'(Electrum|Exodus|Coinomi)',
+            r'wallet\.dat',
+            r'\.safariextension',
+            r'Cookies\.binarycookies'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'macOS - Infostealer',
+        'description': 'macOS infostealer targeting credentials/wallets'
+    },
+    'MAC_LAUNCHAGENT_PERSIST': {
+        'patterns': [
+            r'LaunchAgents/.*\.plist',
+            r'LaunchDaemons/.*\.plist',
+            r'launchctl\s+load',
+            r'RunAtLoad.*true',
+            r'KeepAlive.*true',
+            r'/Library/LaunchAgents/(?!com\.apple)'
+        ],
+        'score': 7,
+        'severity': 'HIGH',
+        'category': 'macOS - LaunchAgent Persistence',
+        'description': 'Persistence via LaunchAgent/LaunchDaemon'
+    },
+    'MAC_LOGINITEM_PERSIST': {
+        'patterns': [
+            r'loginitems\.plist',
+            r'tell\s+application.*System\s+Events.*login\s+item',
+            r'SMLoginItemSetEnabled',
+            r'StartupItems/',
+            r'osascript.*login.*item'
+        ],
+        'score': 6,
+        'severity': 'MEDIUM',
+        'category': 'macOS - Login Item Persistence',
+        'description': 'Persistence via login items'
+    },
+    'MAC_DYLIB_HIJACK': {
+        'patterns': [
+            r'@rpath/.*\.dylib',
+            r'@executable_path/.*\.dylib',
+            r'DYLD_INSERT_LIBRARIES',
+            r'\.dylib.*inject',
+            r'/tmp/.*\.dylib',
+            r'/Users/Shared/.*\.dylib'
+        ],
+        'score': 9,
+        'severity': 'CRITICAL',
+        'category': 'macOS - Dylib Hijacking',
+        'description': 'Dynamic library hijacking detected'
+    },
+    'MAC_SUSP_LOCATION': {
+        'patterns': [
+            r'/tmp/\.[a-zA-Z0-9]+',
+            r'/private/tmp/.*\.app',
+            r'/Users/Shared/.*\.app',
+            r'\.hidden/.*\.app',
+            r'/Library/Application\s+Support/\.[a-zA-Z]+'
+        ],
+        'score': 8,
+        'severity': 'HIGH',
+        'category': 'macOS - Suspicious Location',
+        'description': 'Application in suspicious location'
+    },
+    'MAC_OSASCRIPT_ABUSE': {
+        'patterns': [
+            r'osascript\s+-e',
+            r'do\s+shell\s+script',
+            r'tell\s+application.*Terminal',
+            r'JavaScript.*ObjC\.import',
+            r'eval\(ObjC\.unwrap'
+        ],
+        'score': 7,
+        'severity': 'HIGH',
+        'category': 'macOS - AppleScript Abuse',
+        'description': 'Malicious use of osascript/AppleScript'
+    },
+    # ===== Cross-Platform C2 Frameworks =====
+    'C2_COBALT_STRIKE': {
+        'patterns': [
+            r'\b(beacon|cobaltstrike|cs\.exe)\b',
+            r'Mozilla/5\.0.*MSIE\s+\d+\.0',
+            r'port\s+(50050|7443)',
+            r'malleable.*profile',
+            r'powershell.*IEX.*http'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'C2 - Cobalt Strike',
+        'description': 'Cobalt Strike C2 beacon detected'
+    },
+    'C2_METASPLOIT': {
+        'patterns': [
+            r'\b(meterpreter|msf|metasploit)\b',
+            r'reverse_tcp',
+            r'reverse_https',
+            r'metsrv\.dll',
+            r'ReflectiveLoader',
+            r'port.*4444'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'C2 - Metasploit',
+        'description': 'Metasploit Meterpreter detected'
+    },
+    'C2_EMPIRE_POWERSHELL': {
+        'patterns': [
+            r'\b(empire|starkiller)\b',
+            r'powershell.*-enc\s+[A-Za-z0-9+/=]{50,}',
+            r'System\.Net\.WebClient.*DownloadString',
+            r'IEX\s+\(New-Object',
+            r'Invoke-Empire',
+            r'agent\.ps1'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'C2 - Empire/Starkiller',
+        'description': 'PowerShell Empire C2 agent detected'
+    },
+    'C2_SLIVER': {
+        'patterns': [
+            r'\b(sliver|sliverC2)\b',
+            r'implant.*beacon',
+            r'mtls.*C2',
+            r'wireguard.*tunnel',
+            r'/tmp/sliver'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'C2 - Sliver',
+        'description': 'Sliver C2 framework detected'
+    },
+    'C2_POSHC2': {
+        'patterns': [
+            r'\bposhc2\b',
+            r'PoshC2.*implant',
+            r'dropper\.ps1',
+            r'SharpSocks',
+            r'Invoke-PowerShellTcp'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'C2 - PoshC2',
+        'description': 'PoshC2 C2 framework detected'
+    },
+
+    # ===== LIVING OFF THE LAND BINARIES (LOLBins) =====
+    'LOLBIN_CERTUTIL': {
+        'patterns': [
+            r'certutil.*-decode',
+            r'certutil.*-urlcache',
+            r'certutil.*-f.*http',
+            r'certutil.*-split',
+            r'certutil.*-encode'
+        ],
+        'score': 8,
+        'severity': 'HIGH',
+        'category': 'LOLBin - Certutil Abuse',
+        'description': 'Certutil abused for file download or encoding (common malware technique)'
+    },
+    'LOLBIN_BITSADMIN': {
+        'patterns': [
+            r'bitsadmin.*\/transfer',
+            r'bitsadmin.*\/download',
+            r'bitsadmin.*\/addfile',
+            r'bitsadmin.*http'
+        ],
+        'score': 8,
+        'severity': 'HIGH',
+        'category': 'LOLBin - BITSAdmin Abuse',
+        'description': 'BITSAdmin used for malicious file download'
+    },
+    'LOLBIN_MSHTA': {
+        'patterns': [
+            r'mshta.*http',
+            r'mshta.*javascript:',
+            r'mshta.*vbscript:',
+            r'mshta\.exe.*\.hta'
+        ],
+        'score': 9,
+        'severity': 'CRITICAL',
+        'category': 'LOLBin - MSHTA Abuse',
+        'description': 'MSHTA used to execute malicious HTA/script (fileless malware)'
+    },
+    'LOLBIN_REGSVR32': {
+        'patterns': [
+            r'regsvr32.*\/s.*\/u.*\/i:http',
+            r'regsvr32.*scrobj\.dll',
+            r'regsvr32.*\.sct',
+            r'regsvr32.*\/i:.*\.xml'
+        ],
+        'score': 9,
+        'severity': 'CRITICAL',
+        'category': 'LOLBin - Regsvr32 Abuse',
+        'description': 'Regsvr32 used for script execution bypass (Squiblydoo technique)'
+    },
+    'LOLBIN_WMIC': {
+        'patterns': [
+            r'wmic.*process.*call.*create',
+            r'wmic.*\/node:',
+            r'wmic.*\/format:.*http',
+            r'wmic.*shadowcopy.*delete'
+        ],
+        'score': 8,
+        'severity': 'HIGH',
+        'category': 'LOLBin - WMIC Abuse',
+        'description': 'WMIC used for remote execution or malicious operations'
+    },
+    'LOLBIN_MSIEXEC': {
+        'patterns': [
+            r'msiexec.*\/q.*http',
+            r'msiexec.*\/i.*http',
+            r'msiexec.*\/quiet'
+        ],
+        'score': 7,
+        'severity': 'HIGH',
+        'category': 'LOLBin - MSIExec Abuse',
+        'description': 'MSIExec used to download and execute remote MSI packages'
+    },
+    'LOLBIN_RUNDLL32_ADVANCED': {
+        'patterns': [
+            r'rundll32.*javascript:',
+            r'rundll32.*comsvcs\.dll.*MiniDump',
+            r'rundll32.*ieadvpack\.dll',
+            r'rundll32.*pcwutl\.dll'
+        ],
+        'score': 9,
+        'severity': 'CRITICAL',
+        'category': 'LOLBin - Rundll32 Advanced Abuse',
+        'description': 'Rundll32 used for credential dumping or script execution'
+    },
+    'LOLBIN_FORFILES': {
+        'patterns': [
+            r'forfiles.*\/c.*cmd',
+            r'forfiles.*\/c.*powershell',
+            r'forfiles.*\/c.*calc'
+        ],
+        'score': 6,
+        'severity': 'MEDIUM',
+        'category': 'LOLBin - Forfiles Abuse',
+        'description': 'Forfiles used to execute arbitrary commands'
+    },
+    'LOLBIN_INSTALLUTIL': {
+        'patterns': [
+            r'installutil\.exe.*\/logfile=',
+            r'installutil\.exe.*\/U'
+        ],
+        'score': 8,
+        'severity': 'HIGH',
+        'category': 'LOLBin - InstallUtil Abuse',
+        'description': 'InstallUtil used to execute malicious .NET assemblies'
+    },
+
+    # ===== CLOUD & SAAS ABUSE =====
+    'CLOUD_AZURE_TOKEN_THEFT': {
+        'patterns': [
+            r'Get-AzureADToken',
+            r'\.azure.*credentials',
+            r'az\s+account\s+get-access-token',
+            r'Invoke-AADIntReconAsOutsider',
+            r'AADInternals',
+            r'\.azure.*accessTokens\.json'
+        ],
+        'score': 9,
+        'severity': 'CRITICAL',
+        'category': 'Cloud - Azure AD Token Theft',
+        'description': 'Azure AD token theft or enumeration detected'
+    },
+    'CLOUD_AWS_CREDENTIAL_DUMP': {
+        'patterns': [
+            r'\.aws.*credentials',
+            r'aws\s+configure\s+export-credentials',
+            r'AWS_ACCESS_KEY_ID',
+            r'AWS_SECRET_ACCESS_KEY',
+            r'aws.*sts.*get-session-token',
+            r'~/.aws/credentials'
+        ],
+        'score': 9,
+        'severity': 'CRITICAL',
+        'category': 'Cloud - AWS Credential Theft',
+        'description': 'AWS credentials being accessed or exfiltrated'
+    },
+    'CLOUD_GCP_CREDENTIAL_ACCESS': {
+        'patterns': [
+            r'gcloud\s+auth\s+list',
+            r'gcloud\s+auth\s+print-access-token',
+            r'\.config.*gcloud.*credentials',
+            r'GOOGLE_APPLICATION_CREDENTIALS',
+            r'service-account.*\.json'
+        ],
+        'score': 9,
+        'severity': 'CRITICAL',
+        'category': 'Cloud - GCP Credential Theft',
+        'description': 'Google Cloud credentials being accessed'
+    },
+    'CLOUD_KUBERNETES_ESCAPE': {
+        'patterns': [
+            r'kubectl.*--token=',
+            r'kubectl.*get\s+secrets',
+            r'/var/run/secrets/kubernetes\.io',
+            r'kubectl.*exec.*\/bin\/bash',
+            r'serviceaccount.*token'
+        ],
+        'score': 8,
+        'severity': 'HIGH',
+        'category': 'Cloud - Kubernetes Token Access',
+        'description': 'Kubernetes service account token access (potential cluster compromise)'
+    },
+    'CLOUD_METADATA_ACCESS': {
+        'patterns': [
+            r'169\.254\.169\.254',
+            r'curl.*metadata\.google\.internal',
+            r'Invoke-RestMethod.*169\.254\.169\.254',
+            r'wget.*169\.254\.169\.254'
+        ],
+        'score': 8,
+        'severity': 'HIGH',
+        'category': 'Cloud - Instance Metadata Access',
+        'description': 'Cloud instance metadata service accessed (credential harvesting)'
+    },
+
+    # ===== CONTAINER ESCAPES =====
+    'CONTAINER_DOCKER_ESCAPE': {
+        'patterns': [
+            r'docker.*--privileged',
+            r'/var/run/docker\.sock',
+            r'docker.*-v\s+/:/host',
+            r'nsenter.*--target.*--mount.*--uts.*--ipc.*--net',
+            r'runc.*exec'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'Container - Docker Escape',
+        'description': 'Docker container escape attempt detected'
+    },
+    'CONTAINER_BREAKOUT_CVE': {
+        'patterns': [
+            r'CVE-2019-5736',
+            r'CVE-2022-0492',
+            r'dirtycow',
+            r'shocker\.c',
+            r'runc.*override'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'Container - Known CVE Exploit',
+        'description': 'Known container escape vulnerability exploitation'
+    },
+    'CONTAINER_CAPABILITIES_ABUSE': {
+        'patterns': [
+            r'capsh.*--print',
+            r'setcap.*cap_sys_admin',
+            r'CAP_SYS_ADMIN',
+            r'CAP_SYS_PTRACE',
+            r'getcap.*\/bin\/'
+        ],
+        'score': 7,
+        'severity': 'HIGH',
+        'category': 'Container - Capability Abuse',
+        'description': 'Linux capabilities being manipulated (privilege escalation)'
+    },
+    'CONTAINER_CGROUP_ESCAPE': {
+        'patterns': [
+            r'\/proc\/1\/cgroup',
+            r'cgroupv2',
+            r'release_agent',
+            r'notify_on_release',
+            r'\/sys\/fs\/cgroup'
+        ],
+        'score': 8,
+        'severity': 'HIGH',
+        'category': 'Container - Cgroup Escape',
+        'description': 'Container cgroup manipulation detected (escape attempt)'
+    },
+
+    # ===== HARDWARE & FIRMWARE THREATS =====
+    'HARDWARE_DMA_ATTACK': {
+        'patterns': [
+            r'pcileech',
+            r'DMA.*attack',
+            r'Thunderbolt.*exploit',
+            r'FireWire.*attack',
+            r'PCIe.*arbiter'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'Hardware - DMA Attack',
+        'description': 'Direct Memory Access (DMA) attack detected (physical access)'
+    },
+    'HARDWARE_UEFI_ROOTKIT': {
+        'patterns': [
+            r'BootExecute',
+            r'UEFI.*rootkit',
+            r'EFI.*backdoor',
+            r'\\EFI\\.*malware',
+            r'SecureBoot.*disable'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'Hardware - UEFI/BIOS Rootkit',
+        'description': 'UEFI/BIOS level rootkit detected (persistent firmware malware)'
+    },
+    'HARDWARE_HYPERVISOR_ROOTKIT': {
+        'patterns': [
+            r'Blue\s+Pill',
+            r'SubVirt',
+            r'VMCS.*shadow',
+            r'hypervisor.*rootkit',
+            r'VT-x.*hijack'
+        ],
+        'score': 10,
+        'severity': 'CRITICAL',
+        'category': 'Hardware - Hypervisor Rootkit',
+        'description': 'Hypervisor-level rootkit detected (below OS level)'
+    },
+    'HARDWARE_COLD_BOOT_ATTACK': {
+        'patterns': [
+            r'cold\s+boot.*attack',
+            r'RAM.*freezing',
+            r'memory.*remanence',
+            r'BitLocker.*key.*extract'
+        ],
+        'score': 9,
+        'severity': 'CRITICAL',
+        'category': 'Hardware - Cold Boot Attack',
+        'description': 'Cold boot attack indicators (RAM extraction)'
     }
 }
 
@@ -384,9 +955,9 @@ def parse_network_connections(output: str) -> Dict[str, Any]:
             conn_entry = {
                 'protocol': protocol,
                 'local_ip': local_ip,
-                'local_port': local_port,
+                'local_port': int(local_port) if local_port and local_port.isdigit() else local_port,
                 'remote_ip': remote_ip,
-                'remote_port': remote_port,
+                'remote_port': int(remote_port) if remote_port and remote_port.isdigit() else remote_port,
                 'state': state,
                 'pid': pid,
                 'process': process,
@@ -597,12 +1168,26 @@ def parse_handles(output: str) -> Dict[str, Any]:
     mutexes = []
 
     lines = output.split('\n')
+    header_skipped = False
 
     for line in lines:
-        if 'mutex' in line.lower():
-            mutexes.append({'details': line.strip()})
+        stripped = line.strip()
+        if not stripped:
+            continue
 
-        handles.append({'details': line.strip()})
+        # Skip header/separator lines
+        if not header_skipped:
+            if re.match(r'^(PID|Offset|---)', stripped) or 'Volatility' in stripped:
+                continue
+            # First data line seen - headers are done
+            if re.match(r'^\d', stripped):
+                header_skipped = True
+
+        if 'mutex' in line.lower():
+            mutexes.append({'details': stripped})
+
+        if header_skipped and stripped:
+            handles.append({'details': stripped})
 
     return {
         'plugin': 'handles',
@@ -925,3 +1510,255 @@ def generate_next_steps(parsed_data: Dict[str, Any], output: str) -> str:
 def analyze_volatility_output(output: str) -> Dict[str, Any]:
     """Legacy function for compatibility"""
     return parse_volatility_output(output)
+
+
+# ===== EXPLOIT DATABASE INTEGRATION =====
+
+def extract_software_versions(parsed_data: Dict[str, Any]) -> List[Dict[str, str]]:
+    """
+    Extract software products and versions from Volatility output
+    Returns list of {'vendor', 'product', 'version', 'extra_info'}
+
+    Supports:
+    - Process executable paths (chrome.exe, firefox.exe, etc.)
+    - DLL versions
+    - Service versions
+    """
+    software_list = []
+    seen = set()  # Deduplication
+
+    # Extract from processes
+    processes = parsed_data.get('processes', [])
+    for proc in processes:
+        # Get process name from ImageFileName or Process column
+        proc_name = proc.get('name') or proc.get('ImageFileName') or proc.get('Process') or proc.get('Name') or ''
+        proc_name = proc_name.strip().lower()
+
+        # Get full path if available
+        proc_path = proc.get('path') or proc.get('Path') or proc.get('exe_path') or ''
+
+        # Common software version patterns
+        version_patterns = {
+            # Web browsers
+            r'chrome\.exe': {'vendor': 'google', 'product': 'chrome'},
+            r'firefox\.exe': {'vendor': 'mozilla', 'product': 'firefox'},
+            r'msedge\.exe': {'vendor': 'microsoft', 'product': 'edge'},
+            r'safari\.app': {'vendor': 'apple', 'product': 'safari'},
+
+            # Office suites
+            r'winword\.exe': {'vendor': 'microsoft', 'product': 'word'},
+            r'excel\.exe': {'vendor': 'microsoft', 'product': 'excel'},
+            r'powerpnt\.exe': {'vendor': 'microsoft', 'product': 'powerpoint'},
+
+            # PDF viewers
+            r'acrord32\.exe': {'vendor': 'adobe', 'product': 'acrobat_reader'},
+            r'acrobat\.exe': {'vendor': 'adobe', 'product': 'acrobat'},
+
+            # Media players
+            r'vlc\.exe': {'vendor': 'videolan', 'product': 'vlc'},
+            r'wmplayer\.exe': {'vendor': 'microsoft', 'product': 'windows_media_player'},
+
+            # Java
+            r'java\.exe': {'vendor': 'oracle', 'product': 'jre'},
+            r'javaw\.exe': {'vendor': 'oracle', 'product': 'jre'},
+
+            # Web servers (Linux/Mac)
+            r'apache2': {'vendor': 'apache', 'product': 'http_server'},
+            r'nginx': {'vendor': 'nginx', 'product': 'nginx'},
+            r'httpd': {'vendor': 'apache', 'product': 'http_server'},
+
+            # SSH servers
+            r'sshd': {'vendor': 'openbsd', 'product': 'openssh'},
+
+            # Databases
+            r'mysqld': {'vendor': 'oracle', 'product': 'mysql'},
+            r'postgres': {'vendor': 'postgresql', 'product': 'postgresql'},
+        }
+
+        for pattern, software_info in version_patterns.items():
+            if re.search(pattern, proc_name) or re.search(pattern, proc_path.lower()):
+                # Extract version from path or command line if available
+                cmdline = proc.get('CommandLine') or proc.get('CmdLine') or ''
+                combined_text = f"{proc_path} {cmdline}"
+
+                # Common version regex patterns
+                # Matches: 1.2.3, 10.0.19041, 2024.01.15
+                version_match = re.search(r'[/\\](\d+\.[\d\.]+)', combined_text)
+                version = version_match.group(1) if version_match else ''
+
+                # Create unique key
+                key = f"{software_info['vendor']}:{software_info['product']}:{version}"
+                if key not in seen:
+                    seen.add(key)
+                    software_list.append({
+                        'vendor': software_info['vendor'],
+                        'product': software_info['product'],
+                        'version': version,
+                        'extra_info': '',
+                        'process': proc_name
+                    })
+                break
+
+    # Extract from DLLs (if parsed_data contains DLL info)
+    dlls = parsed_data.get('dlls', [])
+    for dll in dlls:
+        dll_name = dll.get('name', '').lower()
+        dll_path = dll.get('path', '').lower()
+
+        # Windows DLLs that are often vulnerable
+        if 'msvcr' in dll_name or 'msvcp' in dll_name:  # Microsoft Visual C++ Runtime
+            version_match = re.search(r'msvcr?(\d+)', dll_name)
+            if version_match:
+                ver_num = version_match.group(1)
+                key = f"microsoft:visual_c++_redistributable:{ver_num}"
+                if key not in seen:
+                    seen.add(key)
+                    software_list.append({
+                        'vendor': 'microsoft',
+                        'product': 'visual_c++_redistributable',
+                        'version': ver_num,
+                        'extra_info': '',
+                        'process': 'DLL'
+                    })
+
+    return software_list
+
+
+def correlate_exploits(parsed_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Correlate Volatility findings with exploit database
+    Returns dict with CVEs and exploits for detected software
+    """
+    try:
+        from rag_engine.cve_query_engine import CVEQueryEngine
+    except ImportError:
+        return {
+            'error': 'CVE Query Engine not available',
+            'vulnerable_software': [],
+            'total_cves': 0
+        }
+
+    # Extract software versions
+    software_list = extract_software_versions(parsed_data)
+
+    if not software_list:
+        return {
+            'vulnerable_software': [],
+            'total_cves': 0,
+            'message': 'No software versions detected in output'
+        }
+
+    # Query CVE database
+    try:
+        engine = CVEQueryEngine()
+    except FileNotFoundError as e:
+        return {
+            'error': f'CVE database not found: {e}',
+            'vulnerable_software': [],
+            'total_cves': 0
+        }
+
+    vulnerable_software = []
+    total_cves = 0
+
+    for software in software_list:
+        if not software['version']:
+            continue  # Skip if no version detected
+
+        # Query CVEs
+        cves = engine.query_cves_for_service(
+            vendor=software['vendor'],
+            product=software['product'],
+            version=software['version'],
+            version_extra_info=software['extra_info']
+        )
+
+        if cves:
+            # Get exploits for top CVE
+            top_cve = cves[0]
+            exploits = engine.get_exploits_for_cve(top_cve.cve_id)
+
+            vulnerable_software.append({
+                'vendor': software['vendor'],
+                'product': software['product'],
+                'version': software['version'],
+                'process': software['process'],
+                'cves': [
+                    {
+                        'cve_id': cve.cve_id,
+                        'cvss_score': cve.cvss_score,
+                        'severity': cve.severity,
+                        'confidence': cve.confidence,
+                        'has_exploit': cve.has_exploit,
+                        'exploit_count': cve.exploit_count,
+                        'description': cve.description
+                    }
+                    for cve in cves
+                ],
+                'exploits': [
+                    {
+                        'edb_id': exploit['edb_id'],
+                        'title': exploit['title'],
+                        'type': exploit['type'],
+                        'verified': exploit['verified'],
+                        'url': exploit['url']
+                    }
+                    for exploit in exploits[:3]  # Top 3 exploits
+                ],
+                'exploit_summary': f"{len(exploits)} exploit(s) available" if exploits else "No public exploits"
+            })
+            total_cves += len(cves)
+
+    return {
+        'vulnerable_software': vulnerable_software,
+        'total_cves': total_cves,
+        'total_vulnerable': len(vulnerable_software)
+    }
+
+
+def format_exploit_results(exploit_data: Dict[str, Any]) -> str:
+    """
+    Format exploit correlation results for display
+    """
+    if 'error' in exploit_data:
+        return f"\n[EXPLOIT DB] {exploit_data['error']}\n"
+
+    if exploit_data['total_vulnerable'] == 0:
+        return "\n[EXPLOIT DB] No vulnerable software detected with known CVEs\n"
+
+    output = []
+    output.append("")
+    output.append("=" * 80)
+    output.append("EXPLOIT DATABASE CORRELATION")
+    output.append("=" * 80)
+    output.append(f"Found {exploit_data['total_vulnerable']} vulnerable software with {exploit_data['total_cves']} CVEs")
+    output.append("")
+
+    for software in exploit_data['vulnerable_software']:
+        output.append(f"[{software['product'].upper()}] v{software['version']} (Process: {software['process']})")
+        output.append(f"  Vendor: {software['vendor']}")
+        output.append(f"  CVEs: {len(software['cves'])}")
+        output.append("")
+
+        # Show top CVEs
+        for cve in software['cves'][:3]:  # Top 3 CVEs
+            output.append(f"  [{cve['cve_id']}] CVSS {cve['cvss_score']} ({cve['severity']})")
+            output.append(f"    {cve['description']}")
+            if cve['has_exploit']:
+                output.append(f"    [!] {cve['exploit_count']} PUBLIC EXPLOIT(S) AVAILABLE")
+            output.append(f"    Confidence: {cve['confidence']}%")
+            output.append("")
+
+        # Show exploits
+        if software['exploits']:
+            output.append("  Available Exploits:")
+            for exploit in software['exploits']:
+                verified_str = "[VERIFIED]" if exploit['verified'] else ""
+                output.append(f"    - EDB-{exploit['edb_id']}: {exploit['title'][:60]} {verified_str}")
+                output.append(f"      URL: {exploit['url']}")
+            output.append("")
+
+        output.append("-" * 80)
+        output.append("")
+
+    return "\n".join(output)

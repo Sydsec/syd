@@ -1,0 +1,539 @@
+{
+  "knowledge_base_part": 5,
+  "categories": [
+    {
+      "id": "proxy_pivoting",
+      "name": "Proxy Pivoting & Tunneling",
+      "topics": [
+        {
+          "title": "SOCKS Proxy Limitations for Raw Packet Scans",
+          "keywords": ["SOCKS", "proxychains", "-sT", "-sS", "raw packets", "pivot", "TCP connect"],
+          "difficulty": "advanced",
+          "content": "CRITICAL: SOCKS proxies operate at OSI Layer 5 (session layer) and can ONLY proxy established TCP connections, NOT raw IP packets. This is why -sS (SYN scan) FAILS through SOCKS: (1) SYN scans require CAP_NET_RAW to craft custom TCP headers with only SYN flag set, (2) SOCKS protocol has no mechanism to encapsulate arbitrary IP packets - it only understands CONNECT requests for TCP streams, (3) When nmap sends a raw SYN packet, the local kernel has no route through the SOCKS proxy. SOLUTION: Use -sT (TCP connect scan) which uses the OS connect() syscall to establish full TCP connections. The kernel routes these through proxychains normally. TRADE-OFFS: -sT is slower (full 3-way handshake vs half-open), more detectable (connection fully established), and leaves logs on target (accept() called). ALSO INCOMPATIBLE: -sU (UDP), -sA (ACK), -sW (Window), -sM (Maimon), -sN/-sF/-sX (NULL/FIN/Xmas) - ALL require raw sockets.",
+          "examples": [
+            {
+              "command": "proxychains nmap -sT -Pn -p 22,80,443,445,3389 192.168.1.0/24",
+              "explanation": "Correct pivot scan: TCP connect, no ping, limited ports",
+              "use_case": "Scanning internal subnet through compromised DMZ host"
+            },
+            {
+              "command": "proxychains nmap -sS -Pn 192.168.1.5",
+              "explanation": "FAILS IMMEDIATELY: Raw packets cannot traverse SOCKS",
+              "use_case": "Common mistake - nmap errors with 'sendto: Operation not permitted'"
+            },
+            {
+              "command": "proxychains nmap -sT -Pn -p- --open -T4 10.10.10.5",
+              "explanation": "Full port scan through proxy with open-only output",
+              "use_case": "Thorough internal host enumeration"
+            },
+            {
+              "command": "ssh -D 9050 user@pivot && proxychains nmap -sT -Pn 172.16.0.0/24",
+              "explanation": "Create SOCKS proxy via SSH, then scan through it",
+              "use_case": "Setting up pivot from initial foothold"
+            }
+          ],
+          "warnings": ["NEVER use -sS/-sU/-sA/-sN/-sF/-sX with proxychains - they silently fail or error", "-Pn is MANDATORY: ICMP ping cannot traverse SOCKS", "Scans are 5-10x slower through proxy", "Target sees proxy IP, not your IP"],
+          "best_practices": ["Always use -sT with SOCKS proxies", "Add -Pn to skip host discovery", "Limit port ranges to reduce time", "Use --open to reduce output noise", "Test proxy connectivity first: proxychains curl http://target"],
+          "related_cves": [],
+          "related_topics": ["SSH Dynamic Port Forwarding", "Chisel Tunneling", "Metasploit Pivoting"]
+        },
+        {
+          "title": "SSH Tunneling vs SOCKS vs VPN for Scanning",
+          "keywords": ["SSH tunnel", "dynamic forward", "local forward", "VPN", "pivot comparison"],
+          "difficulty": "advanced",
+          "content": "THREE MAIN PIVOT METHODS: (1) SSH SOCKS Proxy (-D): Creates SOCKS4a/5 proxy on local port, requires proxychains, only TCP connect scans work, simple to set up. Command: ssh -D 9050 user@pivot. (2) SSH Local Port Forward (-L): Forwards specific local port to remote host:port, no proxychains needed, nmap connects directly to localhost:port, but only ONE target port at a time. Command: ssh -L 8445:internal:445 user@pivot then nmap -sT -p 8445 localhost. (3) VPN/Tun (sshuttle, OpenVPN, WireGuard): Creates Layer 3 tunnel, ALL scan types work including -sS/-sU, nmap sees real internal IPs, most transparent but requires root on pivot or VPN server. COMPARISON: SOCKS is easiest but most limited. Local forward is surgical but tedious for many ports. VPN is most powerful but hardest to set up in pentest scenarios. EXPERT TIP: Use sshuttle for quick Layer 3 tunnel without full VPN: sshuttle -r user@pivot 10.0.0.0/8 --dns",
+          "examples": [
+            {
+              "command": "ssh -D 9050 -f -N user@10.10.10.50",
+              "explanation": "Background SOCKS proxy on port 9050",
+              "use_case": "Persistent pivot for multiple scans"
+            },
+            {
+              "command": "ssh -L 1445:192.168.1.5:445 user@pivot",
+              "explanation": "Forward local 1445 to internal host SMB",
+              "use_case": "Single-port surgical access for SMB enumeration"
+            },
+            {
+              "command": "sshuttle -r user@pivot 192.168.0.0/16 -x pivot_ip",
+              "explanation": "Layer 3 tunnel to internal network, exclude pivot",
+              "use_case": "Full raw socket scanning through SSH"
+            },
+            {
+              "command": "nmap -sS -p 445 192.168.1.5",
+              "explanation": "SYN scan works ONLY through VPN/sshuttle, not SOCKS",
+              "use_case": "After sshuttle established, raw scans work normally"
+            }
+          ],
+          "warnings": ["sshuttle requires Python on pivot host", "VPN tunnels may trigger IDS on encrypted traffic volume", "Local forwards require knowing target IPs in advance"],
+          "best_practices": ["Use SOCKS for quick reconnaissance", "Use local forward for focused exploitation", "Use sshuttle/VPN when raw scans needed", "Always test tunnel before large scans"],
+          "related_cves": [],
+          "related_topics": ["Chisel Reverse Tunnels", "Ligolo-ng", "Metasploit autoroute"]
+        },
+        {
+          "title": "Multi-Hop Pivoting and Scan Performance",
+          "keywords": ["double pivot", "multi-hop", "nested proxy", "latency", "timeout"],
+          "difficulty": "expert",
+          "content": "MULTI-HOP REALITY: Each pivot adds 50-200ms latency. A double-pivot (you -> DMZ -> internal -> target) means 100-400ms round-trip MINIMUM. Nmap default timeouts assume <100ms latency. CRITICAL ADJUSTMENTS: (1) Increase --host-timeout to 30m or higher, (2) Use --max-retries 3 or higher, (3) Set --min-rtt-timeout 500ms and --max-rtt-timeout 5s, (4) Reduce parallelism with --max-parallelism 5 to prevent proxy overload. PROXYCHAINS CHAINING: Edit /etc/proxychains.conf with multiple SOCKS proxies in order - traffic flows through each sequentially. Use 'strict_chain' mode for predictable routing. DOUBLE SSH: ssh -J user@hop1 user@hop2 -D 9050 creates SOCKS through two SSH hops. LATENCY KILL: A /24 subnet scan that takes 5 minutes direct can take 2+ HOURS through double pivot. Prioritize port selection ruthlessly.",
+          "examples": [
+            {
+              "command": "proxychains nmap -sT -Pn -p 22,445,3389 --max-parallelism 3 --min-rtt-timeout 500ms --max-rtt-timeout 10s 192.168.1.0/24",
+              "explanation": "Multi-hop optimized scan with conservative timing",
+              "use_case": "Scanning through double pivot without timeouts"
+            },
+            {
+              "command": "ssh -J user@dmz user@internal -D 9050 -f -N",
+              "explanation": "Double-hop SOCKS via SSH jump host",
+              "use_case": "Reaching deeply segmented network"
+            },
+            {
+              "command": "nmap -sT -Pn --top-ports 20 --open -T2 10.10.10.0/24",
+              "explanation": "Ultra-conservative scan for high-latency tunnels",
+              "use_case": "Scanning through unstable or slow tunnel"
+            }
+          ],
+          "warnings": ["Default nmap timing causes massive false negatives through multi-hop", "Proxychains strict_chain fails if any hop dies", "UDP effectively unusable through SOCKS chains"],
+          "best_practices": ["Always adjust RTT timeouts for tunnel latency", "Reduce parallelism to prevent tunnel saturation", "Use --top-ports instead of full port range", "Test single host before subnet scan"],
+          "related_cves": [],
+          "related_topics": ["Timing Templates", "Proxy Stability", "Tunnel Monitoring"]
+        }
+      ]
+    },
+    {
+      "id": "idle_scan_mechanics",
+      "name": "Idle Scan Deep Dive",
+      "topics": [
+        {
+          "title": "IP ID Sequence Mechanics and Zombie Requirements",
+          "keywords": ["idle scan", "-sI", "IP ID", "zombie", "IPID", "incremental", "sequence"],
+          "difficulty": "expert",
+          "content": "IDLE SCAN PRINCIPLE: Infer target port state by observing IP ID changes on a 'zombie' host, without sending packets from your IP to target. IP ID is a 16-bit field in IPv4 header used for fragment reassembly. ZOMBIE REQUIREMENT: Must have GLOBALLY INCREMENTING IP ID - each packet the zombie sends increments its IP ID by exactly 1. WHY: (1) You send SYN to TARGET with SPOOFED source = zombie IP, (2) If port OPEN: target sends SYN-ACK to zombie, zombie sends RST (incrementing its IP ID), (3) If port CLOSED: target sends RST to zombie, zombie ignores it (no increment), (4) You probe zombie's IP ID before and after - if it increased by 2 instead of 1, port was open. MODERN CHALLENGE: Most modern OS randomize IP ID per-connection (Linux 4.1+, Windows 10+, BSD). GOOD ZOMBIES: Old printers, IoT devices, legacy Windows (XP/2003), embedded systems. TEST ZOMBIE: nmap -O -v zombie_ip - look for 'IP ID Sequence: Incremental' in output.",
+          "examples": [
+            {
+              "command": "nmap -O -v 192.168.1.100 | grep -i 'IP ID'",
+              "explanation": "Test if host is viable zombie (need 'Incremental')",
+              "use_case": "Zombie validation before idle scan"
+            },
+            {
+              "command": "sudo nmap -sI 192.168.1.100:80 10.10.10.5 -p 22,80,443",
+              "explanation": "Idle scan target using zombie:port, limited ports",
+              "use_case": "Stealth scan hiding behind printer"
+            },
+            {
+              "command": "sudo nmap -sI printer.local -Pn -p 445 192.168.1.0/24",
+              "explanation": "Scan entire subnet through idle zombie",
+              "use_case": "Network-wide stealth reconnaissance"
+            },
+            {
+              "command": "sudo nmap -sI zombie:135 --packet-trace target",
+              "explanation": "Idle scan with packet trace for debugging",
+              "use_case": "Troubleshooting why idle scan shows all filtered"
+            }
+          ],
+          "warnings": ["Requires root/sudo for raw packet spoofing", "Zombie port must be open and responding", "Random IP ID zombies give false results (all filtered)", "Very slow: one port at a time analysis"],
+          "best_practices": ["ALWAYS validate zombie with -O first", "Use zombie port that's definitely open (80, 135)", "Start with single port test before full scan", "Avoid zombies behind NAT (shared IP ID space)"],
+          "related_cves": [],
+          "related_topics": ["IP Spoofing", "Firewall Evasion", "Stealth Scanning"]
+        },
+        {
+          "title": "Idle Scan Failure Modes and Troubleshooting",
+          "keywords": ["idle scan", "all filtered", "zombie failure", "troubleshooting", "IP ID random"],
+          "difficulty": "expert",
+          "content": "COMMON FAILURES: (1) ALL PORTS SHOW FILTERED: Zombie has random IP ID. Solution: Find different zombie, use -O to verify. (2) INCONSISTENT RESULTS: Zombie has per-host IP ID (common in Linux). Each destination gets different sequence. Solution: Test zombie against target specifically. (3) ZOMBIE PORT CLOSED: If zombie:port specified is closed, scan fails entirely. Solution: Verify port open with direct scan first. (4) STATEFUL FIREWALL: If firewall between zombie and target drops unsolicited SYN-ACKs, zombie never sees response, scan shows all closed. (5) RATE LIMITING: If zombie is rate-limited or has host-based firewall, IP ID increment becomes unpredictable. DEBUGGING: Use --packet-trace to see exact packets. Look for: 'IPID of zombie changed from X to Y'. If Y-X != 1 or 2, zombie is unsuitable. ALTERNATIVE: If no good zombie exists, consider -sS with decoys (-D) instead for partial anonymity.",
+          "examples": [
+            {
+              "command": "sudo nmap -sI zombie:80 -p 80 --packet-trace target 2>&1 | grep IPID",
+              "explanation": "Trace IP ID changes during idle scan",
+              "use_case": "Debugging why results seem wrong"
+            },
+            {
+              "command": "for port in 80 135 443; do nmap -Pn -sS -p $port zombie && echo 'Port $port open'; done",
+              "explanation": "Find open port on zombie to use",
+              "use_case": "Zombie port selection"
+            },
+            {
+              "command": "hping3 -S -r zombie -p 80 -c 5",
+              "explanation": "Alternative IP ID testing with hping3",
+              "use_case": "Verify IP ID increments consistently"
+            }
+          ],
+          "warnings": ["Modern patched systems make poor zombies", "IoT devices may have IP ID per-destination", "Load-balanced services give inconsistent results"],
+          "best_practices": ["Test zombie multiple times before trusting", "Document zombie behavior for report", "Have backup zombie hosts identified", "Consider if idle scan is worth the complexity"],
+          "related_cves": [],
+          "related_topics": ["Decoy Scanning", "Spoofed Source Scanning", "Anonymity Techniques"]
+        }
+      ]
+    },
+    {
+      "id": "timing_attacks",
+      "name": "Timing Attacks & Side Channels",
+      "topics": [
+        {
+          "title": "SSH Username Enumeration via Timing (CVE-2018-15473)",
+          "keywords": ["CVE-2018-15473", "SSH", "username enumeration", "timing", "OpenSSH", "user-enum"],
+          "difficulty": "advanced",
+          "content": "CVE-2018-15473 MECHANISM: OpenSSH before 7.7 has timing difference in authentication response. When client sends auth request: (1) VALID username: Server loads user's hashed password, compares against provided password, then rejects - takes ~50-100ms, (2) INVALID username: Server immediately rejects without password lookup - takes ~10-30ms. EXPLOIT: Send malformed auth packet that causes server to reveal timing before auth completes. NMAP SCRIPT: ssh-auth-methods was NOT designed for this. Use dedicated tools: ssh-user-enum.py, or Metasploit auxiliary/scanner/ssh/ssh_enumusers. CRITICAL: Even timing-based enum triggers fail2ban because connection is established. Each probe = 1 SSH connection logged. Ban threshold (usually 5) reached quickly. MITIGATION CHECK: dpkg -l openssh-server | grep 7.[7-9] (7.7+ patched). Ubuntu 18.04+ backported fix.",
+          "examples": [
+            {
+              "command": "python3 ssh-user-enum.py -U users.txt -t 192.168.1.10",
+              "explanation": "Timing-based SSH user enumeration",
+              "use_case": "Validating usernames before password attack"
+            },
+            {
+              "command": "nmap -p 22 --script ssh-auth-methods 192.168.1.10",
+              "explanation": "Check allowed auth methods (NOT user enum)",
+              "use_case": "Determine if password auth enabled"
+            },
+            {
+              "command": "msf> use auxiliary/scanner/ssh/ssh_enumusers",
+              "explanation": "Metasploit SSH user enumeration module",
+              "use_case": "Professional-grade timing attack"
+            },
+            {
+              "command": "dpkg -l openssh-server",
+              "explanation": "Check if target SSH is vulnerable (need <7.7)",
+              "use_case": "Version verification on compromised host"
+            }
+          ],
+          "warnings": ["EVERY probe creates SSH connection log", "fail2ban triggers within 3-5 attempts typically", "Timing varies with network latency - may need calibration", "Not all timing scripts work reliably"],
+          "best_practices": ["Verify SSH version is vulnerable first", "Use very small username lists", "Add delays between attempts to avoid lockout", "Consider if risk of detection is worth the intel"],
+          "related_cves": ["CVE-2018-15473", "CVE-2016-6210"],
+          "related_topics": ["Password Spraying", "Fail2ban Evasion", "SSH Hardening"]
+        },
+        {
+          "title": "Response Timing Analysis for Service Fingerprinting",
+          "keywords": ["timing analysis", "response time", "fingerprinting", "latency", "profiling"],
+          "difficulty": "expert",
+          "content": "TIMING AS FINGERPRINT: Beyond version strings, response timing reveals implementation details. TECHNIQUES: (1) TCP handshake timing: Time between SYN and SYN-ACK varies by OS/implementation. Linux ~0.5ms local, Windows ~1-2ms. (2) Application response timing: Database query time reveals backend. Instant response = cached, 100ms+ = disk query, 500ms+ = complex join. (3) Error handling timing: Invalid input processed faster than valid-but-wrong = indicates input validation logic. (4) Crypto timing: Weak implementations leak key bits through decrypt time. NMAP TIMING: Use --min-rtt-timeout and --initial-rtt-timeout to measure baseline. Script timing: capture output with timestamps. ADVANCED: Use hping3 for microsecond precision TCP timing. DEFENSE EVASION: Consistent timing = protection. Add random delays to mask processing time.",
+          "examples": [
+            {
+              "command": "hping3 -S -p 80 -c 10 target | grep rtt",
+              "explanation": "Measure TCP SYN-ACK timing with precision",
+              "use_case": "OS fingerprinting via timing"
+            },
+            {
+              "command": "for i in {1..10}; do time curl -s -o /dev/null http://target/login -d 'user=admin&pass=x'; done",
+              "explanation": "Measure login response time for timing attack",
+              "use_case": "Detecting valid usernames via response delay"
+            },
+            {
+              "command": "nmap -sT -Pn --scan-delay 100ms -p 80 --packet-trace target",
+              "explanation": "Scan with timing data in trace output",
+              "use_case": "Collecting timing baselines"
+            }
+          ],
+          "warnings": ["Network latency adds noise to measurements", "Jitter makes timing attacks unreliable over WAN", "Load balancers distribute to different backends with different timing"],
+          "best_practices": ["Take many samples and use median", "Test from consistent network position", "Account for network jitter in analysis", "Document timing methodology for reports"],
+          "related_cves": [],
+          "related_topics": ["Blind SQL Injection via Timing", "Padding Oracle Attacks", "Cache Timing Attacks"]
+        }
+      ]
+    },
+    {
+      "id": "blue_team_detection",
+      "name": "Blue Team: Scan Detection & Defense",
+      "topics": [
+        {
+          "title": "Network Signatures for Detecting Nmap Scans",
+          "keywords": ["detection", "IDS", "Snort", "Suricata", "signatures", "scan detection", "blue team"],
+          "difficulty": "advanced",
+          "content": "NMAP DETECTION SIGNATURES: (1) SYN SCAN: High rate of SYN packets without completing handshake. Signature: >20 SYN to different ports from same source in 1 second. (2) NULL/FIN/XMAS: Illegal flag combinations. NULL = no flags, FIN only = no prior connection, XMAS = FIN+PSH+URG. Any of these = definite scan. (3) VERSION DETECTION: Banner grabs with unusual ordering. Nmap sends probes in specific sequence identifiable via timing pattern. (4) OS DETECTION: Malformed packets like TCP with undefined flag combinations, ICMP with unusual payloads, IP options rarely used in legitimate traffic. (5) NSE SCRIPTS: Script-specific patterns like SMB null session attempts, HTTP requests to non-existent paths. SNORT RULES: 'alert tcp any any -> any any (flags:S; threshold: type threshold, track by_src, count 20, seconds 1; msg:\"Possible SYN scan\"; sid:1000001;)'. SURICATA: Built-in scan detection in suricata.yaml -> detect-engine -> rule-profiling.",
+          "examples": [
+            {
+              "command": "alert tcp any any -> $HOME_NET any (flags:0; msg:\"NULL scan detected\"; sid:1000010;)",
+              "explanation": "Snort rule for NULL scan detection",
+              "use_case": "IDS signature for stealth scans"
+            },
+            {
+              "command": "alert tcp any any -> $HOME_NET any (flags:FPU; msg:\"XMAS scan detected\"; sid:1000011;)",
+              "explanation": "Snort rule for XMAS scan detection",
+              "use_case": "Detecting reconnaissance"
+            },
+            {
+              "command": "tcpdump -i eth0 'tcp[tcpflags] == tcp-syn' | awk '{print $3}' | sort | uniq -c | sort -rn",
+              "explanation": "Quick scan detection via SYN counting",
+              "use_case": "Manual analysis without IDS"
+            },
+            {
+              "command": "grep -E 'scan|probe|nmap' /var/log/suricata/fast.log",
+              "explanation": "Check Suricata logs for scan alerts",
+              "use_case": "Post-incident scan detection"
+            }
+          ],
+          "warnings": ["Legitimate vulnerability scanners trigger same signatures", "Tune thresholds to environment or face alert fatigue", "Encrypted tunnels hide scan patterns"],
+          "best_practices": ["Baseline normal SYN rates before setting thresholds", "Alert on illegal flag combinations (guaranteed scan)", "Correlate source IPs across time windows", "Log all scan detections for threat intel"],
+          "related_cves": [],
+          "related_topics": ["IDS Tuning", "Network Forensics", "Threat Hunting"]
+        },
+        {
+          "title": "Fingerprinting Nmap Itself (Tool Attribution)",
+          "keywords": ["nmap fingerprint", "tool detection", "attribution", "scanner identification"],
+          "difficulty": "expert",
+          "content": "NMAP LEAVES FINGERPRINTS: Even careful attackers can be identified as using nmap. DETECTION VECTORS: (1) TCP OPTIONS ORDER: Nmap uses MSS,SACK,TS,NOP,WS in specific order, different from OS stacks. (2) WINDOW SIZE: Nmap SYN probes use window size 1024 (common), but OS detection probes use specific values like 65535, 512, etc. rarely seen naturally. (3) TTL VALUES: Nmap defaults may differ from host OS. Linux nmap on Linux sends TTL 64, but scan packets may have TTL 37-64 from probes. (4) TIMING PATTERNS: Script engine has characteristic pause patterns between probe types. (5) USER-AGENT: http-* scripts use 'Mozilla/5.0 (compatible; Nmap Scripting Engine; https://nmap.org/book/nse.html)' unless changed. (6) PROBE SEQUENCES: Version detection sends probes in documented order. COUNTERMEASURE: p0f tool passively fingerprints remote OS including scanner tools. Zeek/Bro logs TCP options for analysis. EVASION: --data-length, --ttl, --spoof-mac change some signatures but not all.",
+          "examples": [
+            {
+              "command": "p0f -i eth0 -o /var/log/p0f.log",
+              "explanation": "Run p0f to passively fingerprint all connections",
+              "use_case": "Detecting nmap usage in traffic"
+            },
+            {
+              "command": "tshark -r capture.pcap -Y 'tcp.options.mss == 1460 && tcp.window_size == 1024 && tcp.flags.syn == 1' -T fields -e ip.src",
+              "explanation": "Find potential nmap SYN scans via TCP options",
+              "use_case": "Forensic analysis of packet capture"
+            },
+            {
+              "command": "zeek -r capture.pcap && grep -i nmap conn.log",
+              "explanation": "Process pcap with Zeek, search for nmap indicators",
+              "use_case": "Post-incident network forensics"
+            }
+          ],
+          "warnings": ["Skilled attackers modify nmap source to change fingerprints", "Attribution is probabilistic, not definitive", "Other tools may have similar signatures"],
+          "best_practices": ["Combine multiple indicators for attribution", "Log TCP options in firewall/IDS for forensics", "Compare against known nmap probe databases", "Consider honeypots to capture attacker TTPs"],
+          "related_cves": [],
+          "related_topics": ["Passive OS Fingerprinting", "Network Forensics", "Attacker Attribution"]
+        },
+        {
+          "title": "Defensive Countermeasures and Scan Mitigation",
+          "keywords": ["defense", "mitigation", "rate limiting", "blocking", "firewall", "hardening"],
+          "difficulty": "advanced",
+          "content": "LAYERED DEFENSE: (1) PERIMETER: Rate-limit new connections per source IP. iptables: -m recent --update --seconds 60 --hitcount 20 -j DROP. Blocks rapid port scanning. (2) HOST FIREWALL: Default deny inbound. Only allow required ports from authorized sources. (3) PORT KNOCKING: Require specific sequence before port opens. Invisible to scanners. (4) TAR PIT: Slow down attackers with delayed responses. LaBrea, iptables TARPIT target. Wastes scanner time. (5) DECEPTION: Honeypots return fake open ports. Portspoof returns fake banners for all 65535 ports, making scans useless. (6) LOGGING: Log all SYN packets for forensics. iptables -j LOG --log-prefix 'SYN: '. (7) BEHAVIORAL: Fail2ban/CrowdSec auto-block IPs exceeding thresholds. NETWORK: Implement BCP38 (anti-spoofing) to prevent idle scans using your network. CLOUD: AWS Security Groups, Azure NSG - default deny, log with VPC Flow Logs.",
+          "examples": [
+            {
+              "command": "iptables -A INPUT -p tcp --syn -m recent --name portscan --update --seconds 60 --hitcount 20 -j DROP",
+              "explanation": "Rate limit SYN packets per source IP",
+              "use_case": "Basic scan prevention at firewall"
+            },
+            {
+              "command": "iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --set --name SSH",
+              "explanation": "Track new SSH connections for rate limiting",
+              "use_case": "SSH brute force prevention"
+            },
+            {
+              "command": "portspoof -c /etc/portspoof.conf -s /etc/portspoof.sig -D",
+              "explanation": "Run portspoof to return fake banners on all ports",
+              "use_case": "Deceiving nmap version detection"
+            },
+            {
+              "command": "fail2ban-client set sshd banip 10.10.10.50",
+              "explanation": "Manually ban scanner IP in fail2ban",
+              "use_case": "Immediate response to active scanner"
+            }
+          ],
+          "warnings": ["Rate limiting can affect legitimate high-connection services", "Tar pits may not work against async scanners", "Aggressive blocking may DoS legitimate users behind NAT"],
+          "best_practices": ["Layer multiple defenses", "Alert on scan detection, don't just block", "Preserve logs for forensics before blocking", "Test defenses with authorized scans"],
+          "related_cves": [],
+          "related_topics": ["Intrusion Prevention", "Honeypots", "Network Hardening"]
+        }
+      ]
+    },
+    {
+      "id": "advanced_evasion",
+      "name": "Advanced Evasion Techniques",
+      "topics": [
+        {
+          "title": "Fragmentation Attacks and MTU Manipulation",
+          "keywords": ["fragmentation", "--mtu", "fragment", "evasion", "IDS bypass"],
+          "difficulty": "expert",
+          "content": "FRAGMENTATION EVASION: Split probe packets into fragments too small for stateless inspection. --mtu X sets maximum transmission unit, forcing fragmentation. X must be multiple of 8. MECHANISM: TCP header is 20 bytes. With --mtu 8, header splits across 3 fragments. Stateless firewalls/IDS see only first fragment with source/dest IP but incomplete TCP header - may pass traffic. MODERN LIMITATION: Stateful firewalls reassemble before inspection. Most enterprise IDS (Suricata, Snort3) handle fragmentation. STILL WORKS AGAINST: Legacy firewalls, misconfigured iptables, some cloud ACLs, load balancers. DETECTION: Fragmented traffic on unusual ports is suspicious. Normal web traffic rarely fragments. --send-eth bypasses OS fragmentation for full control. ADVANCED: Combine with --data-length to pad fragments, --badsum to test if fragmented packets are checksummed.",
+          "examples": [
+            {
+              "command": "sudo nmap -sS --mtu 8 -Pn -p 80 192.168.1.1",
+              "explanation": "SYN scan with minimum fragmentation (8-byte MTU)",
+              "use_case": "Evading basic packet filters"
+            },
+            {
+              "command": "sudo nmap -sS --mtu 24 -f -Pn 192.168.1.1",
+              "explanation": "Fragmented scan with 24-byte chunks",
+              "use_case": "Testing IDS fragment reassembly"
+            },
+            {
+              "command": "sudo nmap -sS --mtu 16 --data-length 100 -Pn -p 1-100 target",
+              "explanation": "Fragmented scan with payload padding",
+              "use_case": "Increasing evasion complexity"
+            },
+            {
+              "command": "sudo nmap -sS -f -f -Pn target",
+              "explanation": "Double fragmentation (-f -f = 16-byte fragments)",
+              "use_case": "Maximum header fragmentation"
+            }
+          ],
+          "warnings": ["Fragmented scans are SLOWER (reassembly timeouts)", "Fragments may be dropped by some routers", "Very small MTU screams 'evasion attempt' to analysts", "Some targets drop all fragments as policy"],
+          "best_practices": ["Test single host before subnet scan", "Combine with other evasion for layered approach", "Log which MTU values bypass specific defenses", "Document evasion techniques used for report"],
+          "related_cves": [],
+          "related_topics": ["IDS Evasion", "Firewall Bypass", "Packet Crafting"]
+        },
+        {
+          "title": "Decoy Scanning and Source Spoofing",
+          "keywords": ["decoy", "-D", "spoofing", "source IP", "RND", "attribution"],
+          "difficulty": "advanced",
+          "content": "DECOY SCANNING (-D): Send probes appearing from multiple source IPs to confuse attribution. YOU are included in the decoy list (use ME keyword). MECHANISM: For each probe, nmap sends identical packets with different source IPs. Target sees scans from many IPs simultaneously. DEFENDER CHALLENGE: All decoys and real scanner look identical. Must investigate all. REQUIREMENTS: Decoy IPs should be (1) up and reachable (or responses reveal the real scanner), (2) not on same subnet as target (easy to verify), (3) plausible for the scan type. RND generates random IPs (often implausible or dead). LIMITATION: Source IP spoofing requires raw sockets (root) and non-egress-filtered network. Most ISPs block spoofed sources (BCP38). Works best on internal pentests. FULL SPOOF (-S): Completely spoof source with no ME. You see no responses. Only useful with idle scan or if you control network path.",
+          "examples": [
+            {
+              "command": "sudo nmap -sS -D 10.0.0.1,10.0.0.2,ME,10.0.0.3 192.168.1.1",
+              "explanation": "SYN scan with 3 decoys plus real IP (ME)",
+              "use_case": "Confusing attribution on internal network"
+            },
+            {
+              "command": "sudo nmap -sS -D RND:5,ME 192.168.1.1",
+              "explanation": "5 random decoys plus real IP",
+              "use_case": "Quick decoy scan (random IPs may be dead)"
+            },
+            {
+              "command": "sudo nmap -sS -D 192.168.1.100,192.168.1.101,192.168.1.102,ME -e eth0 -Pn target",
+              "explanation": "Decoys with specific interface and no ping",
+              "use_case": "Controlled decoy scan with verified reachable decoys"
+            },
+            {
+              "command": "sudo nmap -sI zombie -D decoy1,decoy2 target",
+              "explanation": "Idle scan with additional decoys",
+              "use_case": "Maximum attribution confusion"
+            }
+          ],
+          "warnings": ["Decoy IPs must be up or defenders identify real scanner by elimination", "Egress filtering blocks spoofed packets on most networks", "Too many decoys slow scan and increase detection", "RND often produces unrealistic/dead IPs"],
+          "best_practices": ["Use 3-5 decoys maximum for balance", "Choose decoys that are actually online", "Include ME in random position in list", "Test on single port before full scan"],
+          "related_cves": [],
+          "related_topics": ["Source Spoofing", "Idle Scanning", "Attribution Evasion"]
+        }
+      ]
+    },
+    {
+      "id": "enterprise_scanning",
+      "name": "Large-Scale & Enterprise Scanning",
+      "topics": [
+        {
+          "title": "Scanning Class A Networks (/8) Efficiently",
+          "keywords": ["large scale", "/8", "enterprise", "masscan", "distributed", "zmap"],
+          "difficulty": "expert",
+          "content": "REALITY CHECK: A /8 network = 16.7 million IPs. Full port scan = 16.7M * 65535 = 1 trillion probes. At 1000 pps, that's 31 YEARS. PRACTICAL APPROACH: (1) Use masscan for host discovery (10M pps capable): masscan 10.0.0.0/8 -p 80,443 --rate 100000. (2) Feed live hosts to nmap for detailed scan. (3) Nmap for specific port/service analysis on discovered hosts. NMAP OPTIMIZATION: --min-hostgroup 256, --min-parallelism 100, --max-retries 1, --host-timeout 5m. Use -T5 with --max-rate to prevent network destabilization. OUTPUT MANAGEMENT: Use -oA for every scan. Split targets with --exclude to create resumable chunks. DISTRIBUTED: Use tools like dnmap for multi-scanner coordination. Split target list: split -l 10000 targets.txt target_chunk_. CLOUD: Spin up ephemeral VMs in target's region for low-latency scanning.",
+          "examples": [
+            {
+              "command": "masscan 10.0.0.0/8 -p 22,80,443,445,3389 --rate 50000 -oG masscan_hosts.gnmap",
+              "explanation": "High-speed discovery of common ports across /8",
+              "use_case": "Initial reconnaissance of large enterprise"
+            },
+            {
+              "command": "grep 'open' masscan_hosts.gnmap | awk '{print $2}' | sort -u > live_hosts.txt",
+              "explanation": "Extract live hosts from masscan output",
+              "use_case": "Preparing target list for nmap"
+            },
+            {
+              "command": "nmap -sV -sC -iL live_hosts.txt --min-hostgroup 256 --max-retries 2 -oA detailed_scan",
+              "explanation": "Detailed scan of discovered hosts with optimized parallelism",
+              "use_case": "Service enumeration of live hosts"
+            },
+            {
+              "command": "split -l 5000 live_hosts.txt hosts_ && for f in hosts_*; do nmap -iL $f -oA scan_$f & done",
+              "explanation": "Parallel nmap processes on target chunks",
+              "use_case": "Distributing scan across CPU cores"
+            }
+          ],
+          "warnings": ["Aggressive scanning can crash network equipment", "Check with network ops before enterprise-wide scans", "Rate limits may trigger DDoS protection", "Always have resume capability for long scans"],
+          "best_practices": ["Discover first (masscan/zmap), detail second (nmap)", "Split large target lists into chunks", "Use --exclude-file to avoid sensitive hosts", "Schedule around maintenance windows"],
+          "related_cves": [],
+          "related_topics": ["Masscan", "ZMap", "Distributed Scanning"]
+        },
+        {
+          "title": "Output Management and Database Integration",
+          "keywords": ["output", "database", "parsing", "XML", "automation", "reporting"],
+          "difficulty": "advanced",
+          "content": "ALWAYS USE -oA: Creates .nmap (human), .gnmap (grepable), .xml (structured). XML is key for automation. PARSING XML: Python: from libnmap.parser import NmapParser; report = NmapParser.parse_fromfile('scan.xml'). Ruby: Nmap::XML.new('scan.xml'). DATABASE STORAGE: Import to PostgreSQL/MySQL for correlation across scans. Tools: nmapdb, Sparta, or custom scripts. ELASTICSEARCH: Import for Kibana dashboards: cat scan.xml | nmap-xml-to-json | jq -c '.[]' | while read line; do curl -X POST 'localhost:9200/nmap/_doc' -H 'Content-Type: application/json' -d \"$line\"; done. SPLUNK: Universal Forwarder + nmap XML sourcetype. METASPLOIT: db_import scan.xml loads directly into MSF database. REPORTING: xsltproc with custom XSLT transforms XML to HTML reports. Tools: nmap-bootstrap-xsl for styled reports.",
+          "examples": [
+            {
+              "command": "nmap -sV -oA enterprise_scan 10.0.0.0/16",
+              "explanation": "Scan with all output formats",
+              "use_case": "Standard enterprise scan with full output"
+            },
+            {
+              "command": "python3 -c \"from libnmap.parser import NmapParser; r=NmapParser.parse_fromfile('scan.xml'); print([h.address for h in r.hosts if h.is_up()])\"",
+              "explanation": "Parse XML and list live hosts with Python",
+              "use_case": "Quick scripted extraction"
+            },
+            {
+              "command": "xsltproc scan.xml -o report.html",
+              "explanation": "Convert XML to HTML using default stylesheet",
+              "use_case": "Quick visual report generation"
+            },
+            {
+              "command": "msfconsole -q -x 'db_import scan.xml; hosts; exit'",
+              "explanation": "Import nmap scan into Metasploit database",
+              "use_case": "Feeding recon to exploitation framework"
+            }
+          ],
+          "warnings": ["Large XML files consume significant memory to parse", "Database imports may fail on malformed XML", "Always validate XML before automated processing"],
+          "best_practices": ["Use -oA for every scan without exception", "Develop standard parsing scripts for consistent extraction", "Store raw XML forever; regenerate reports as needed", "Version control scan outputs for comparison over time"],
+          "related_cves": [],
+          "related_topics": ["Scan Automation", "Reporting", "Data Analysis"]
+        }
+      ]
+    },
+    {
+      "id": "account_lockout_extended",
+      "name": "Account Lockout Prevention (Extended)",
+      "topics": [
+        {
+          "title": "Complete Safe vs Dangerous NSE Script Reference",
+          "keywords": ["safe scripts", "dangerous scripts", "lockout", "brute", "authentication"],
+          "difficulty": "advanced",
+          "content": "SAFE SCRIPTS (No Authentication): smb-os-discovery (null session OS info), smb-protocols (SMB version enumeration), smb-security-mode (signing status), smb-vuln-* (all vuln checks use safe probes), ldap-rootdse (anonymous LDAP info), ldap-search (with anonymous bind), ms-sql-info (unauthenticated info), mysql-info (banner/version), http-* (most web scripts), ssh-hostkey, ssh-auth-methods. DANGEROUS SCRIPTS (Cause Lockouts): smb-brute (WILL lock accounts), smb-enum-users with aggressive=true, ldap-brute, ms-sql-brute, mysql-brute, http-form-brute, ssh-brute, vnc-brute, ftp-brute, ALL *-brute scripts. CAUTION SCRIPTS (May Lock with Wrong Args): smb-enum-users (safe in default mode, dangerous with bruteonly), rdp-enum-users (timing-based, may trigger monitoring). RULE: If script name contains 'brute', assume it will cause lockouts. Check script documentation: nmap --script-help <script>",
+          "examples": [
+            {
+              "command": "nmap -p 445 --script=smb-os-discovery,smb-protocols,smb-security-mode,smb-vuln-* 192.168.1.0/24",
+              "explanation": "Complete safe SMB enumeration suite",
+              "use_case": "AD reconnaissance without lockout risk"
+            },
+            {
+              "command": "nmap -p 389,636 --script=ldap-rootdse,ldap-search 192.168.1.10",
+              "explanation": "Safe anonymous LDAP enumeration",
+              "use_case": "Domain controller reconnaissance"
+            },
+            {
+              "command": "nmap --script-help smb-enum-users | grep -i 'dangerous\\|lockout\\|brute'",
+              "explanation": "Check script documentation for lockout warnings",
+              "use_case": "Vetting unknown scripts before use"
+            },
+            {
+              "command": "nmap -p 445 --script=smb-enum-shares --script-args smbusername='',smbpassword='' target",
+              "explanation": "Null session share enumeration",
+              "use_case": "Share discovery without credentials"
+            }
+          ],
+          "warnings": ["NEVER run smb-brute in production AD environments", "Lockout policies often are 3-5 attempts in 30 minutes", "Scripts marked 'intrusive' in categories may still be safe for lockout", "'intrusive' != 'causes lockout' - check specifics"],
+          "best_practices": ["When in doubt, read --script-help output", "Start with 'safe' category: --script=safe", "Test scripts against lab DC first", "Coordinate with client on lockout policy before enumeration"],
+          "related_cves": [],
+          "related_topics": ["SMB Enumeration", "LDAP Enumeration", "AD Reconnaissance"]
+        },
+        {
+          "title": "Multi-Protocol AD Enumeration Without Lockouts",
+          "keywords": ["Active Directory", "enumeration", "Kerberos", "LDAP", "RPC", "safe enum"],
+          "difficulty": "advanced",
+          "content": "AD ENUM STRATEGY: Layer multiple protocols for comprehensive picture without locking accounts. (1) DNS (53): Enumerate via AXFR/IXFR if allowed, or brute common names. No lockout risk. (2) LDAP (389/636): Anonymous bind with ldap-rootdse gets domain name, naming contexts. No auth = no lockout. (3) RPC (135/445): smb-os-discovery, smb-protocols, enum4linux with null session. No lockout. (4) Kerberos (88): AS-REQ username enumeration - Kerberos responds differently to valid vs invalid usernames WITHOUT credentials. Tool: kerbrute. No lockout because no password attempt. (5) SMB Shares: Null session enum4linux -S or smb-enum-shares. No lockout. AVOID: smb-enum-users with any password guessing, smb-brute, ldap-brute. TIMING: Even safe enumeration at high rates may trigger anomaly detection. Add --scan-delay 500ms for stealth.",
+          "examples": [
+            {
+              "command": "nmap -p 389 --script ldap-rootdse 192.168.1.10",
+              "explanation": "Get AD domain info via anonymous LDAP",
+              "use_case": "Initial domain discovery"
+            },
+            {
+              "command": "kerbrute userenum --dc 192.168.1.10 -d corp.local users.txt",
+              "explanation": "Kerberos username enumeration without lockout",
+              "use_case": "Validating username list safely"
+            },
+            {
+              "command": "nmap -p 135,139,445 --script=smb-os-discovery,smb-enum-shares,smb-protocols 192.168.1.10",
+              "explanation": "Safe SMB enumeration suite",
+              "use_case": "Windows host fingerprinting"
+            },
+            {
+              "command": "enum4linux -a -M -l -d 192.168.1.10",
+              "explanation": "Comprehensive SMB enum with null session",
+              "use_case": "Deep AD enumeration without credentials"
+            }
+          ],
+          "warnings": ["kerbrute still creates Kerberos logs (Event 4768)", "High-rate enum may trigger SIEM alerts", "Some AD configs block null sessions entirely"],
+          "best_practices": ["Start with DNS and LDAP anonymous enum", "Use kerbrute for username validation", "Layer protocols to confirm findings", "Document which enum methods succeeded for report"],
+          "related_cves": [],
+          "related_topics": ["Kerberoasting", "AS-REP Roasting", "BloodHound"]
+        }
+      ]
+    }
+  ]
+}

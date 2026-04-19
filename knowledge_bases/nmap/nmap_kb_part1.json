@@ -1,0 +1,204 @@
+{
+  "knowledge_base_part": 1,
+  "categories": [
+    {
+      "id": "nmap_basics",
+      "name": "Nmap Fundamentals",
+      "topics": [
+        {
+          "title": "Nmap Syntax and Target Specification",
+          "keywords": ["nmap syntax", "target specification", "IP ranges", "CIDR notation", "host discovery", "basic scanning"],
+          "difficulty": "beginner",
+          "content": "Nmap (Network Mapper) is the industry-standard network discovery and security auditing tool. The basic command structure: nmap [Scan Type] [Options] [Target]. Target specification supports: single IPs (192.168.1.1), hostnames (target.example.com), CIDR notation (192.168.1.0/24 for 256 hosts), ranges (192.168.1.1-50), and octet ranges (192.168.0-255.1). Use -iL to read targets from file. Use --exclude and --excludefile to skip sensitive systems. Nmap performs host discovery before port scanning unless -Pn is specified.",
+          "examples": [
+            {"command": "nmap 192.168.1.1", "explanation": "Basic scan of single host, top 1000 ports", "use_case": "Quick initial recon"},
+            {"command": "nmap 192.168.1.0/24", "explanation": "Scan entire /24 subnet (256 hosts)", "use_case": "Internal network discovery"},
+            {"command": "nmap -iL targets.txt --excludefile exclude.txt", "explanation": "Read targets from file, exclude listed hosts", "use_case": "Large engagement with defined scope"},
+            {"command": "nmap -Pn -n 192.168.1.100", "explanation": "Skip host discovery (-Pn) and DNS (-n)", "use_case": "Scanning firewalled host that blocks ICMP"}
+          ],
+          "warnings": ["Large subnet scans can take hours", "Verify target specification before running", "Scanning without authorization is illegal"],
+          "best_practices": ["Always use --excludefile for critical systems", "Use -n to skip DNS for faster scanning", "Start with small test scans"],
+          "related_cves": [],
+          "related_topics": ["Host Discovery", "Port Specification"]
+        },
+        {
+          "title": "When to Use Nmap vs Other Tools",
+          "keywords": ["nmap alternatives", "masscan", "rustscan", "zmap", "tool selection"],
+          "difficulty": "intermediate",
+          "content": "Nmap excels at accuracy and deep enumeration but isn't always fastest. Masscan scans entire Internet in minutes but sacrifices accuracy. RustScan combines Masscan speed with Nmap integration. Zmap is for Internet-scale research. Use Nmap when you need: accurate version detection, vulnerability scanning via NSE, OS fingerprinting, stealth capabilities, or comprehensive analysis. Common workflow: Masscan for discovery, Nmap for deep enumeration of identified hosts.",
+          "examples": [
+            {"command": "masscan -p1-65535 192.168.1.0/24 --rate=1000 -oL results.txt && nmap -sV -iL <(awk '/open/{print $4}' results.txt | sort -u)", "explanation": "Masscan for fast discovery, Nmap for service detection", "use_case": "Time-limited engagement"},
+            {"command": "rustscan -a 192.168.1.100 -- -sV -sC", "explanation": "RustScan with automatic Nmap handoff", "use_case": "CTF or lab environment"}
+          ],
+          "warnings": ["Masscan may miss ports", "RustScan needs ulimit tuning"],
+          "best_practices": ["Use right tool for the job", "Combine tools for large networks"],
+          "related_cves": [],
+          "related_topics": ["Timing and Performance"]
+        },
+        {
+          "title": "Common Beginner Mistakes",
+          "keywords": ["nmap mistakes", "scanning errors", "troubleshooting", "beginner errors"],
+          "difficulty": "beginner",
+          "content": "Most dangerous mistake: scanning wrong targets. Triple-check before pressing Enter. Running without root/sudo forces TCP Connect instead of faster SYN scans. Ignoring -Pn flag misses firewalled hosts. Using -T5 on production networks causes disruption. Trusting version banners without verification (Ubuntu backports patches without changing versions). Not saving output loses hours of work. Always use -oA to save all formats.",
+          "examples": [
+            {"command": "sudo nmap -Pn -sS -p 22,80,443 192.168.1.1", "explanation": "Correct: sudo for privileges, -Pn for firewalled host", "use_case": "Scanning known-live target behind firewall"},
+            {"command": "nmap -oA engagement_$(date +%Y%m%d)_target -sV -sC 192.168.1.0/24", "explanation": "Proper output with date-stamped filenames", "use_case": "Professional engagement documentation"}
+          ],
+          "warnings": ["Wrong target can scan unauthorized networks", "Aggressive timing crashes services", "Version banners often inaccurate due to backporting"],
+          "best_practices": ["Always run as root/sudo", "Use -Pn for firewalled hosts", "Save output with -oA on every scan"],
+          "related_cves": [],
+          "related_topics": ["False Positives", "Timing"]
+        }
+      ]
+    },
+    {
+      "id": "scan_types",
+      "name": "Scan Types",
+      "topics": [
+        {
+          "title": "TCP SYN Scan (-sS)",
+          "keywords": ["SYN scan", "half-open scan", "stealth scan", "-sS", "TCP SYN"],
+          "difficulty": "beginner",
+          "content": "Default scan type with root privileges. Sends SYN packet, analyzes response without completing connection. SYN-ACK = open, RST = closed, no response = filtered. Called 'half-open' because connection never completes. Faster than TCP Connect, less logging on target. Requires root for raw socket access. Modern IDS still detects SYN scans but technique remains valuable for speed and reliability.",
+          "examples": [
+            {"command": "sudo nmap -sS 192.168.1.1", "explanation": "Basic SYN scan of top 1000 ports", "use_case": "Initial reconnaissance"},
+            {"command": "sudo nmap -sS -p- --min-rate 5000 192.168.1.1", "explanation": "Full 65535 port SYN scan with minimum rate", "use_case": "Complete port discovery"},
+            {"command": "sudo nmap -sS --reason 192.168.1.1", "explanation": "SYN scan showing reason for port state", "use_case": "Understanding port classification"}
+          ],
+          "warnings": ["Requires root/sudo", "Still detectable by modern IDS", "High-rate scans may trigger SYN flood protection"],
+          "best_practices": ["Always run with sudo", "Use --reason to understand results", "Combine with -sV for service info"],
+          "related_cves": [],
+          "related_topics": ["TCP Connect Scan", "Firewall Evasion"]
+        },
+        {
+          "title": "TCP Connect Scan (-sT)",
+          "keywords": ["TCP connect", "-sT", "full connect", "unprivileged scan"],
+          "difficulty": "beginner",
+          "content": "Completes full TCP three-way handshake. Default when running without root. Uses OS connect() system call. Connections fully logged by target. Necessary for scanning through SOCKS proxies (proxychains). Slower than SYN scan. Use when root unavailable or proxy required.",
+          "examples": [
+            {"command": "nmap -sT 192.168.1.1", "explanation": "TCP Connect without root", "use_case": "Scanning without admin access"},
+            {"command": "proxychains nmap -sT -Pn -p 22,80,443 192.168.1.1", "explanation": "Through SOCKS proxy", "use_case": "Pivoting through compromised host"}
+          ],
+          "warnings": ["Connections fully logged", "Slower than SYN", "More network traffic"],
+          "best_practices": ["Prefer SYN when root available", "Use for proxy scenarios"],
+          "related_cves": [],
+          "related_topics": ["TCP SYN Scan", "Proxychains"]
+        },
+        {
+          "title": "UDP Scan (-sU)",
+          "keywords": ["UDP scan", "-sU", "UDP ports", "DNS", "SNMP", "stateless"],
+          "difficulty": "intermediate",
+          "content": "Essential for complete assessment - critical services use UDP: DNS (53), SNMP (161), TFTP (69), NFS. UDP is connectionless - open ports often don't respond. ICMP port unreachable = closed, no response = open|filtered. Very slow due to ICMP rate limiting. Focus on high-value UDP ports rather than full scans. Combine with TCP: -sS -sU -p T:1-1000,U:53,161.",
+          "examples": [
+            {"command": "sudo nmap -sU --top-ports 100 192.168.1.1", "explanation": "Top 100 UDP ports", "use_case": "Initial UDP recon"},
+            {"command": "sudo nmap -sU -sV -p 53,161,500 192.168.1.1", "explanation": "Targeted high-value UDP with version detection", "use_case": "Focused UDP enumeration"},
+            {"command": "sudo nmap -sS -sU -p T:1-1000,U:53,161 192.168.1.1", "explanation": "Combined TCP and UDP", "use_case": "Comprehensive service discovery"}
+          ],
+          "warnings": ["UDP scans very slow", "Open|filtered is ambiguous", "Heavy UDP can trigger rate limiting"],
+          "best_practices": ["Focus on high-value UDP ports", "Combine with version detection", "Run UDP in parallel with TCP"],
+          "related_cves": [],
+          "related_topics": ["SNMP Enumeration", "DNS Scanning"]
+        },
+        {
+          "title": "FIN, NULL, and Xmas Scans",
+          "keywords": ["FIN scan", "NULL scan", "Xmas scan", "-sF", "-sN", "-sX", "firewall evasion"],
+          "difficulty": "advanced",
+          "content": "Exploit RFC 793: closed ports must respond with RST to packets without SYN/RST/ACK flags. Open ports should ignore. FIN scan (-sF) sends FIN only. NULL scan (-sN) sends no flags. Xmas scan (-sX) sends FIN+PSH+URG. Main advantage: may bypass firewalls that only block SYN. CRITICAL: Does NOT work against Windows - they respond RST to everything. Only useful against Unix/Linux. Can only distinguish closed from open|filtered.",
+          "examples": [
+            {"command": "sudo nmap -sF 192.168.1.1", "explanation": "FIN scan for firewall evasion", "use_case": "Evading SYN-blocking filters"},
+            {"command": "sudo nmap -sX --reason 192.168.1.1", "explanation": "Xmas scan with response reasons", "use_case": "Understanding firewall behavior"}
+          ],
+          "warnings": ["Does NOT work against Windows", "Cannot distinguish open from filtered", "Modern IDS recognizes these"],
+          "best_practices": ["Only use against Unix/Linux", "Verify findings with other methods", "Combine with fragmentation for stealth"],
+          "related_cves": [],
+          "related_topics": ["Firewall Evasion", "TCP SYN Scan"]
+        },
+        {
+          "title": "ACK and Window Scans",
+          "keywords": ["ACK scan", "window scan", "-sA", "-sW", "firewall mapping"],
+          "difficulty": "advanced",
+          "content": "NOT for finding open ports - for mapping firewall rules. ACK scan (-sA) sends ACK packets. RST response = unfiltered (reaches host). No response = filtered. Cannot determine if ports are open. Window scan (-sW) examines RST window size for open/closed hints (unreliable, OS-dependent). Use to map what firewall allows, then SYN scan unfiltered ports.",
+          "examples": [
+            {"command": "sudo nmap -sA 192.168.1.1", "explanation": "ACK scan to map firewall rules", "use_case": "Identifying filtered vs unfiltered ports"},
+            {"command": "sudo nmap -sA -p 1-1000 --reason 192.168.1.1", "explanation": "ACK scan with reasons", "use_case": "Understanding firewall behavior"}
+          ],
+          "warnings": ["Cannot determine if ports are open", "Stateful firewalls block these", "Window scan results unreliable"],
+          "best_practices": ["Use for firewall mapping only", "Follow up with SYN scans on unfiltered ports"],
+          "related_cves": [],
+          "related_topics": ["Firewall Evasion", "FIN Scan"]
+        }
+      ]
+    },
+    {
+      "id": "port_specification",
+      "name": "Port Specification",
+      "topics": [
+        {
+          "title": "Port Ranges and Lists",
+          "keywords": ["port ranges", "-p", "port list", "port selection", "target ports"],
+          "difficulty": "beginner",
+          "content": "The -p flag specifies ports. Single: -p 22. Range: -p 1-1000. List: -p 22,80,443. Combined: -p 22,80,443,1000-2000. Full scan: -p- (all 65535). Protocol prefix: -p T:22,80,U:53,161 for TCP/UDP mix. --top-ports N scans N most common ports. --exclude-ports removes specific ports. Develop standard port sets: web (80,443,8080,8443), Windows (135,139,445,3389,5985), databases (1433,1521,3306,5432,27017).",
+          "examples": [
+            {"command": "nmap -p 22,80,443,3389 192.168.1.1", "explanation": "Specific high-value ports", "use_case": "Quick common service check"},
+            {"command": "nmap -p- --min-rate 10000 192.168.1.1", "explanation": "Full 65535 port scan with aggressive rate", "use_case": "Complete port discovery"},
+            {"command": "nmap --top-ports 1000 192.168.1.1", "explanation": "Top 1000 most common ports", "use_case": "Balanced coverage"}
+          ],
+          "warnings": ["Full -p- scans take significant time", "UDP port scanning extremely slow"],
+          "best_practices": ["Use --top-ports for initial recon", "Always do -p- on high-value targets", "Create standard port sets for common scenarios"],
+          "related_cves": [],
+          "related_topics": ["Timing and Performance", "Scan Types"]
+        },
+        {
+          "title": "Fast Scan vs Full Scan Strategies",
+          "keywords": ["fast scan", "-F", "full scan", "scan strategy"],
+          "difficulty": "intermediate",
+          "content": "Fast scan (-F) reduces to 100 ports vs default 1000. Full scan (-p-) covers all 65535. Strategy depends on time, stealth, and thoroughness needs. External perimeters: be thorough. Large internal networks: fast initial sweep, then full scan interesting hosts. Hybrid: --top-ports 3000 balances speed and coverage. Multi-phase: -F across network, identify targets, -p- those hosts.",
+          "examples": [
+            {"command": "nmap -F 192.168.1.0/24", "explanation": "Fast scan of subnet", "use_case": "Quick network reconnaissance"},
+            {"command": "nmap --top-ports 3389 192.168.1.0/24", "explanation": "Top 3389 ports for compromise", "use_case": "Thorough but practical coverage"}
+          ],
+          "warnings": ["Fast scans miss non-standard ports", "Full scans can take hours"],
+          "best_practices": ["Use -F for initial mapping", "Always -p- high-value targets", "Schedule thorough scans during off-hours"],
+          "related_cves": [],
+          "related_topics": ["Timing and Performance", "Port Ranges"]
+        }
+      ]
+    },
+    {
+      "id": "timing_performance",
+      "name": "Timing and Performance",
+      "topics": [
+        {
+          "title": "Timing Templates (T0-T5)",
+          "keywords": ["timing templates", "-T0", "-T1", "-T2", "-T3", "-T4", "-T5", "paranoid", "sneaky", "aggressive"],
+          "difficulty": "intermediate",
+          "content": "T0 (Paranoid): 5 min between probes, evades IDS, impractical (80+ hours for 1000 ports). T1 (Sneaky): 15 sec intervals, still evades time-based IDS. T2 (Polite): 0.4 sec intervals, reduces network load. T3 (Normal): Default, balanced. T4 (Aggressive): Faster, assumes reliable network, good for internal. T5 (Insane): Maximum speed, misses ports on slow hosts, lab only.",
+          "examples": [
+            {"command": "nmap -T1 -p 22,80,443 192.168.1.1", "explanation": "Sneaky timing for IDS evasion", "use_case": "External monitored target"},
+            {"command": "nmap -T4 -sV -sC 192.168.1.0/24", "explanation": "Aggressive for fast internal scan", "use_case": "Internal penetration test"},
+            {"command": "nmap -T5 -p- 10.0.0.1", "explanation": "Insane timing for lab", "use_case": "CTF or isolated lab only"}
+          ],
+          "warnings": ["T5 misses ports on slow hosts", "T0/T1 impractically slow", "T4/T5 trigger IDS"],
+          "best_practices": ["T4 default for internal tests", "T3 for production uncertainty", "T1-T2 for external stealth"],
+          "related_cves": [],
+          "related_topics": ["IDS Evasion", "Rate Limiting"]
+        },
+        {
+          "title": "Rate Limiting and Parallelization",
+          "keywords": ["rate limiting", "--max-rate", "--min-rate", "parallelization", "--min-hostgroup"],
+          "difficulty": "advanced",
+          "content": "--max-rate caps packets/second (e.g., --max-rate 100 for IDS evasion). --min-rate forces minimum rate. --min-hostgroup/--max-hostgroup control parallel hosts. --max-parallelism controls probes per host. --host-timeout abandons slow hosts (e.g., --host-timeout 30m). --max-retries limits retransmissions (reduce from 10 to 2-3 for speed).",
+          "examples": [
+            {"command": "nmap -T4 --max-rate 100 192.168.1.0/24", "explanation": "Aggressive but rate-limited for IDS", "use_case": "Fast scan under IDS threshold"},
+            {"command": "nmap --min-rate 1000 -p- 192.168.1.1", "explanation": "Force fast full port scan", "use_case": "Accelerating on fast network"},
+            {"command": "nmap --max-retries 2 --host-timeout 15m -p- 192.168.1.0/24", "explanation": "Limited retries and timeout for efficiency", "use_case": "Large network with some unresponsive hosts"}
+          ],
+          "warnings": ["High --min-rate causes packet loss", "Very high --min-hostgroup exhausts resources", "Low --max-retries may miss ports"],
+          "best_practices": ["Use --max-rate to stay under IDS thresholds", "Set --host-timeout for large scans", "Test settings before full scans"],
+          "related_cves": [],
+          "related_topics": ["Timing Templates", "IDS Evasion"]
+        }
+      ]
+    }
+  ]
+}

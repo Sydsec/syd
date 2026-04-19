@@ -1,0 +1,162 @@
+{
+  "knowledge_base_part": 3,
+  "categories": [
+    {
+      "id": "os_detection",
+      "name": "OS Detection",
+      "topics": [
+        {
+          "title": "OS Fingerprinting Techniques",
+          "keywords": ["OS detection", "-O", "fingerprinting", "TCP/IP stack", "CPE", "operating system"],
+          "difficulty": "intermediate",
+          "content": "Nmap identifies OS by analyzing TCP/IP stack implementation: initial TTL, window size, TCP options ordering, IP ID generation, responses to malformed packets. -O enables detection. --osscan-guess shows low-confidence matches. --osscan-limit skips hosts without required port states. -A combines OS detection, version detection, scripts, and traceroute. Database contains 5000+ signatures. CPE identifiers (cpe:/o:microsoft:windows_server_2019) enable vulnerability database correlation.",
+          "examples": [
+            {"command": "sudo nmap -O 192.168.1.1", "explanation": "Basic OS detection", "use_case": "Identify OS for vulnerability research"},
+            {"command": "sudo nmap -O --osscan-guess 192.168.1.1", "explanation": "Aggressive guessing for unclear fingerprints", "use_case": "Best-effort OS guess"},
+            {"command": "sudo nmap -A 192.168.1.1", "explanation": "Aggressive: OS + versions + scripts + traceroute", "use_case": "Complete target reconnaissance"},
+            {"command": "sudo nmap -O --osscan-limit 192.168.1.0/24", "explanation": "OS detection skipping incomplete fingerprints", "use_case": "Efficient network-wide discovery"}
+          ],
+          "warnings": ["Requires root privileges", "Accuracy varies for uncommon/hardened systems", "VMs show mixed characteristics", "-A is slow for large scans"],
+          "best_practices": ["Combine with version detection", "Use --osscan-guess when standard fails", "Note CPE for vulnerability correlation"],
+          "related_cves": [],
+          "related_topics": ["Version Detection", "Vulnerability Scanning"]
+        }
+      ]
+    },
+    {
+      "id": "version_detection",
+      "name": "Service and Version Detection",
+      "topics": [
+        {
+          "title": "Version Detection Mechanics",
+          "keywords": ["version detection", "-sV", "service fingerprinting", "version-intensity", "banner grabbing"],
+          "difficulty": "intermediate",
+          "content": "-sV identifies services and versions via banner grabbing and active probes matched against nmap-service-probes database. --version-intensity 0-9 controls thoroughness (default 7). --version-light (2) for fast, --version-all (9) for thorough. Output includes service name, application, version, sometimes OS/patch info. CRITICAL: Banners can be spoofed; Ubuntu backports patches without changing version strings. Always verify critical versions.",
+          "examples": [
+            {"command": "nmap -sV 192.168.1.1", "explanation": "Standard version detection", "use_case": "Service identification for vuln assessment"},
+            {"command": "nmap -sV --version-intensity 9 192.168.1.1", "explanation": "Maximum version probes", "use_case": "Thorough identification on critical target"},
+            {"command": "nmap -sV --version-light -F 192.168.1.0/24", "explanation": "Fast scan with light version detection", "use_case": "Quick service inventory"},
+            {"command": "nmap -sV -p 8080 --version-all 192.168.1.1", "explanation": "Exhaustive detection on unknown port", "use_case": "Identifying service on unusual port"}
+          ],
+          "warnings": ["Banners can be spoofed", "Ubuntu/Debian backports mean version may not reflect patches", "High intensity slows scans", "Some services crash when probed"],
+          "best_practices": ["Always run -sV on discovered ports", "Verify critical versions through other means", "Use intensity 5 as balanced default"],
+          "related_cves": [],
+          "related_topics": ["False Positives", "Backporting"]
+        }
+      ]
+    },
+    {
+      "id": "output_formats",
+      "name": "Output Formats",
+      "topics": [
+        {
+          "title": "Output Formats and Automation",
+          "keywords": ["output formats", "-oN", "-oX", "-oG", "-oA", "XML parsing", "grepable", "automation"],
+          "difficulty": "intermediate",
+          "content": "-oN normal human-readable text. -oX XML for tool integration (Metasploit, custom scripts). -oG grepable single-line-per-host format. -oA creates all three with same base filename - ALWAYS USE THIS. --resume continues interrupted scans from XML. Parse grepable with grep/awk, XML with Python xml.etree or python-nmap library.",
+          "examples": [
+            {"command": "nmap -oA scan_results 192.168.1.0/24", "explanation": "Save all formats", "use_case": "Standard practice for all scans"},
+            {"command": "grep '/open/' scan.gnmap | awk '{print $2}'", "explanation": "Extract IPs with open ports", "use_case": "Quick list of live hosts"},
+            {"command": "nmap --resume interrupted_scan.xml", "explanation": "Continue interrupted scan", "use_case": "Resuming after network issues"},
+            {"command": "grep '445/open' scan.gnmap | awk '{print $2}' | xargs nmap -p445 --script smb-vuln-*", "explanation": "Chain recon with vuln scanning", "use_case": "Automated workflow"}
+          ],
+          "warnings": ["Without -o flags, results lost if terminal closes", "Large XML slow to parse", "Resume only works with XML"],
+          "best_practices": ["Always use -oA", "Implement consistent naming: date_client_scope", "Develop extraction scripts for common tasks"],
+          "related_cves": [],
+          "related_topics": ["Automation", "Scripting"]
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "name": "Troubleshooting",
+      "topics": [
+        {
+          "title": "Common Errors and Solutions",
+          "keywords": ["troubleshooting", "debugging", "--packet-trace", "verbosity", "errors", "timeouts", "permissions"],
+          "difficulty": "intermediate",
+          "content": "Permission errors: 'requires root privileges' means use sudo. No hosts/ports found: use -Pn for firewalled targets. Timeouts: increase --host-timeout, reduce parallelism. --packet-trace shows every packet (use on single hosts). -v/-vv/-vvv increase verbosity. -d/-dd for debug. --reason shows why ports classified as open/closed/filtered. False negatives: slow down timing, reduce parallelism, try different scan types.",
+          "examples": [
+            {"command": "sudo nmap --packet-trace -Pn -p 22 192.168.1.1", "explanation": "Packet trace for debugging", "use_case": "Understanding why port shows filtered"},
+            {"command": "nmap -vv -Pn 192.168.1.1", "explanation": "Very verbose with no host discovery", "use_case": "Debugging firewalled host"},
+            {"command": "nmap -T2 --max-retries 5 --host-timeout 60m 192.168.1.1", "explanation": "Slow timing for unreliable connection", "use_case": "High-latency or lossy link"},
+            {"command": "nmap --reason 192.168.1.1", "explanation": "Show reason for port states", "use_case": "Understanding classifications"},
+            {"command": "nmap --traceroute -Pn 192.168.1.1", "explanation": "Include traceroute", "use_case": "Diagnosing routing problems"}
+          ],
+          "warnings": ["Packet trace extremely verbose", "Slow timing takes hours", "Some filtered results are accurate"],
+          "best_practices": ["Start with -vv for visibility", "Use --reason to understand states", "Verify with manual connections"],
+          "related_cves": [],
+          "related_topics": ["Timing and Performance", "Firewall Detection"]
+        }
+      ]
+    },
+    {
+      "id": "smb_enumeration_deep",
+      "name": "SMB Enumeration (Deep Dive)",
+      "topics": [
+        {
+          "title": "Safe SMB Scanning Without Lockouts",
+          "keywords": ["SMB safe scanning", "account lockout prevention", "smb-protocols", "EternalBlue safe", "SMB signing"],
+          "difficulty": "advanced",
+          "content": "SAFE scripts (no lockouts): smb-protocols, smb-security-mode, smb-os-discovery, smb-vuln-* (vuln checks don't auth), smb-enum-shares. DANGEROUS: smb-brute, smb-enum-users aggressive mode. Windows lockout typically 5 failures, 30 min duration. Null session: --script-args smbusername=\"\",smbpassword=\"\". SMB signing disabled = relay attack opportunity - critical finding.",
+          "examples": [
+            {"command": "nmap -p 445 --script=smb-protocols,smb-security-mode,smb-os-discovery 192.168.1.0/24", "explanation": "Safe SMB enumeration suite", "use_case": "Initial Windows recon without lockout risk"},
+            {"command": "nmap -p 445 --script smb-vuln-* 192.168.1.0/24", "explanation": "All SMB vulnerability checks (safe)", "use_case": "EternalBlue/SMBGhost detection"},
+            {"command": "nmap -p 445 --script smb-enum-shares --script-args smbusername=scanner,smbpassword=SecureP@ss 192.168.1.1", "explanation": "Authenticated share enumeration", "use_case": "Deep enumeration with valid creds"},
+            {"command": "nmap -p 445 --script smb-enum-shares --script-args smbusername=\"\",smbpassword=\"\" 192.168.1.1", "explanation": "Null session attempt", "use_case": "Testing anonymous access"},
+            {"command": "nmap -p 139,445 --script smb-os-discovery 192.168.1.0/24 -oA smb_discovery", "explanation": "OS discovery on both SMB ports", "use_case": "Windows version inventory"}
+          ],
+          "warnings": ["smb-brute WILL cause lockouts", "Null session attempts may be logged", "EDR detects aggressive enumeration"],
+          "best_practices": ["Start with safe scripts only", "Verify lockout policy before cred testing", "Document SMB signing status", "Authenticated enum only after getting valid creds"],
+          "related_cves": ["CVE-2017-0144", "CVE-2020-0796"],
+          "related_topics": ["SMB Vulnerabilities", "Account Lockout"]
+        }
+      ]
+    },
+    {
+      "id": "web_scanning",
+      "name": "Web Scanning",
+      "topics": [
+        {
+          "title": "SSL/TLS Analysis and Certificate Inspection",
+          "keywords": ["SSL scanning", "TLS analysis", "ssl-enum-ciphers", "ssl-cert", "cipher suite", "certificate"],
+          "difficulty": "intermediate",
+          "content": "ssl-enum-ciphers grades ciphers A-F, tests SSL2/3, TLS 1.0-1.3. Weak: export ciphers, DES/3DES, RC4, NULL. Modern requires TLS 1.2+ with ECDHE and AES-GCM. ssl-cert extracts: subject, issuer, validity, SANs. Flag: expired certs, self-signed, internal hostnames in SANs. PCI DSS requires TLS 1.2 minimum.",
+          "examples": [
+            {"command": "nmap -p 443 --script ssl-enum-ciphers 192.168.1.1", "explanation": "Complete cipher suite enumeration", "use_case": "TLS configuration audit"},
+            {"command": "nmap -p 443 --script ssl-cert 192.168.1.1", "explanation": "Certificate details", "use_case": "Certificate audit and expiration check"},
+            {"command": "nmap -p 443,8443,9443 --script=ssl-* 192.168.1.0/24", "explanation": "All SSL analysis on HTTPS ports", "use_case": "Enterprise-wide TLS assessment"},
+            {"command": "nmap -p 25 --script ssl-enum-ciphers --script-args starttls=smtp 192.168.1.1", "explanation": "TLS on STARTTLS SMTP", "use_case": "Email server TLS check"}
+          ],
+          "warnings": ["ssl-enum-ciphers takes time", "Some servers rate-limit TLS", "STARTTLS needs --script-args"],
+          "best_practices": ["Flag any SSLv3 or TLS 1.0", "Identify weak ciphers as issues", "Check certificate chain and expiration"],
+          "related_cves": ["CVE-2014-3566", "CVE-2014-0160"],
+          "related_topics": ["SSL Vulnerabilities", "Compliance"]
+        }
+      ]
+    },
+    {
+      "id": "database_scanning",
+      "name": "Database Scanning",
+      "topics": [
+        {
+          "title": "Database Enumeration and Default Credentials",
+          "keywords": ["database scanning", "MySQL", "MSSQL", "PostgreSQL", "MongoDB", "Redis", "default credentials"],
+          "difficulty": "intermediate",
+          "content": "MySQL (3306): mysql-info, mysql-enum, mysql-databases, mysql-brute. Common: root with blank password. MSSQL (1433/1434): ms-sql-info, ms-sql-empty-password, ms-sql-brute. Check blank SA. PostgreSQL (5432): pgsql-brute. MongoDB (27017): mongodb-info, mongodb-databases. Often no auth by default. Redis (6379): redis-info. Defaults to no auth, permits dangerous commands including potential RCE.",
+          "examples": [
+            {"command": "nmap -p 3306 --script mysql-info 192.168.1.1", "explanation": "MySQL version/capability enum", "use_case": "Initial MySQL recon"},
+            {"command": "nmap -p 1433 --script ms-sql-info,ms-sql-empty-password 192.168.1.1", "explanation": "MSSQL info and blank SA check", "use_case": "SQL Server security check"},
+            {"command": "nmap -p 27017 --script mongodb-info,mongodb-databases 192.168.1.1", "explanation": "MongoDB enum (often no auth)", "use_case": "Check for open MongoDB"},
+            {"command": "nmap -p 6379 --script redis-info 192.168.1.1", "explanation": "Redis info gathering", "use_case": "Check for unauth Redis"},
+            {"command": "nmap -p 3306 --script mysql-brute --script-args brute.firstonly 192.168.1.1", "explanation": "MySQL default creds first", "use_case": "Quick default password check"}
+          ],
+          "warnings": ["Databases may log access attempts", "Default creds testing leaves traces", "Some databases lack lockout but may block IPs"],
+          "best_practices": ["Check default creds methodically", "Document versions for CVE correlation", "Test for anonymous access first"],
+          "related_cves": [],
+          "related_topics": ["Default Credentials", "Service Enumeration"]
+        }
+      ]
+    }
+  ]
+}

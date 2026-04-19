@@ -1,0 +1,359 @@
+{
+  "knowledge_base_part": 3,
+  "categories": [
+    {
+      "id": "malware_analysis",
+      "name": "Malware Analysis",
+      "topics": [
+        {
+          "title": "Service Enumeration with svcscan",
+          "keywords": ["svcscan", "services", "malicious services", "persistence", "service enumeration", "SCM"],
+          "difficulty": "intermediate",
+          "content": "The svcscan plugin enumerates Windows services from memory, revealing both running and stopped services. Services are a common persistence mechanism for malware as they run with SYSTEM privileges and start automatically. The plugin reads service information from the Service Control Manager (SCM) database in memory. Key fields include: service name, display name, binary path, service type (kernel driver, user mode, shared process), start type (auto, manual, disabled), service state, and PID if running. Look for: services with unusual names or display names, services running from temp or user directories, services with suspicious binary paths, disabled security services, and newly created services matching incident timeline. Legitimate services typically run from System32, Program Files, or established vendor directories. Services in temp directories, AppData, or Downloads are highly suspicious. Compare against known-good service baseline for the system.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.svcscan.SvcScan",
+              "explanation": "Enumerate all Windows services from memory",
+              "use_case": "Finding malicious service persistence and disabled security services",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  Order   PID     Start   State   Type    Name    Display Binary\n\n0xfa801b234567  1       0       Boot    Stopped Driver  ACPI    Microsoft ACPI Driver   System32\\drivers\\ACPI.sys\n0xfa801b234678  2       0       Auto    Stopped Driver  AFD     Ancillary Function Driver       \\SystemRoot\\system32\\drivers\\afd.sys\n0xfa801b234789  25      632     Auto    Running Share   RpcSs   Remote Procedure Call   C:\\Windows\\system32\\svchost.exe -k rpcss\n0xfa801b23489a  26      724     Auto    Running Share   Schedule        Task Scheduler  C:\\Windows\\system32\\svchost.exe -k netsvcs\n0xfa801b2349ab  45      872     Auto    Running Share   Themes  Themes  C:\\Windows\\system32\\svchost.exe -k netsvcs\n0xfa801b234abc  67      0       Disabled        Stopped Share   WinDefend       Microsoft Defender Antivirus Service     C:\\ProgramData\\Microsoft\\Windows Defender\\Platform\\4.18.2001.10-0\\MsMpEng.exe\n0xfa801b234bcd  89      6672    Auto    Running Own     MalSvc  Windows Update Service  C:\\Windows\\Temp\\svc.exe\n0xfa801b234cde  90      0       Manual  Stopped Own     BackupSvc       System Backup Agent     C:\\Users\\user\\AppData\\Local\\Temp\\backup.exe\n0xfa801b234def  12      500     Auto    Running Own     SamSs   Security Accounts Manager       C:\\Windows\\system32\\lsass.exe\n\n[CRITICAL FINDINGS:\n1. WinDefend (Windows Defender) is DISABLED - attacker turned off AV\n2. MalSvc runs from C:\\Windows\\Temp\\svc.exe - MALICIOUS (temp directory, spoofed name)\n3. BackupSvc binary in user Temp directory - SUSPICIOUS persistence mechanism]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.svcscan.SvcScan | findstr -i \"Running\"",
+              "explanation": "Filter to show only currently running services",
+              "use_case": "Focusing on active services that may be malicious",
+              "output_sample": "0xfa801b234789  25      632     Auto    Running Share   RpcSs   Remote Procedure Call   C:\\Windows\\system32\\svchost.exe -k rpcss\n0xfa801b23489a  26      724     Auto    Running Share   Schedule        Task Scheduler  C:\\Windows\\system32\\svchost.exe -k netsvcs\n0xfa801b2349ab  45      872     Auto    Running Share   Themes  Themes  C:\\Windows\\system32\\svchost.exe -k netsvcs\n0xfa801b234bcd  89      6672    Auto    Running Own     MalSvc  Windows Update Service  C:\\Windows\\Temp\\svc.exe\n0xfa801b234def  12      500     Auto    Running Own     SamSs   Security Accounts Manager       C:\\Windows\\system32\\lsass.exe"
+            }
+          ],
+          "warnings": [
+            "Service names and display names can be spoofed to appear legitimate",
+            "Some legitimate services may run from non-standard paths",
+            "Disabled security services are high-priority indicators of compromise",
+            "Service PID may not match actual running process if service was restarted"
+          ],
+          "best_practices": [
+            "Compare services against known-good baseline for the system",
+            "Investigate any service running from Temp, AppData, or user directories",
+            "Check for disabled security services (WinDefend, wscsvc, etc.)",
+            "Cross-reference service PIDs with process list",
+            "Look for auto-start services created during attack window",
+            "Document all suspicious services for remediation"
+          ],
+          "related_cves": [],
+          "related_topics": ["Persistence", "Process Enumeration", "Registry Analysis"]
+        },
+        {
+          "title": "Driver Analysis with driverscan and modules",
+          "keywords": ["driverscan", "modules", "drivers", "kernel drivers", "rootkit drivers", "driver signing"],
+          "difficulty": "advanced",
+          "content": "Driver analysis is critical for detecting kernel-mode rootkits and malicious drivers. The driverscan plugin scans for DRIVER_OBJECT structures in memory pool, while modules lists loaded kernel modules from the module list. Comparing results reveals hidden drivers - those in driverscan but not in modules may be unlinked (rootkit technique). Key analysis points: unsigned drivers (legitimate drivers should be signed on modern Windows), drivers loaded from unusual paths, drivers with suspicious names, drivers not matching known-good baseline, and recently loaded drivers during attack window. Malicious drivers can: hide processes and files, intercept system calls, log keystrokes, provide persistent backdoors, and modify kernel behavior. Driver signing enforcement can be bypassed through vulnerable signed drivers, test signing mode, or exploiting vulnerabilities. Cross-reference driver files with filescan and attempt extraction with dumpfiles for analysis.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.driverscan.DriverScan",
+              "explanation": "Scan for all driver objects in memory including hidden ones",
+              "use_case": "Detecting rootkit drivers and hidden kernel modules",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  Start   Size    Service Key     Driver Name     Name\n\n0xfa801c234567  0xfffff80002600000      0x8f000 ACPI    \\Driver\\ACPI    \\FileSystem\\ACPI\n0xfa801c234678  0xfffff80002700000      0x45000 AFD     \\Driver\\AFD     \\Device\\Afd\n0xfa801c234789  0xfffff80002800000      0x12000 Beep    \\Driver\\Beep    \\Device\\Beep\n0xfa801c23489a  0xfffff8000c100000      0x5000  disk    \\Driver\\Disk    \\Device\\Harddisk0\\DR0\n0xfa801c2349ab  0xfffff80002900000      0x23000 HTTP    \\Driver\\HTTP    \\Device\\Http\\Communication\n0xfa801c234abc  0xfffff8000d200000      0x8000  hidden  \\Driver\\hidden  \\Device\\hidden\n0xfa801c234bcd  0xfffff8000d300000      0xa000  rootkit \\Driver\\rootkit \\Device\\rootkit123\n0xfa801c234cde  0xfffff80002a00000      0x67000 Tcpip   \\Driver\\Tcpip   \\Device\\Tcp\n0xfa801c234def  0xfffff80002b00000      0x89000 Ntfs    \\Driver\\Ntfs    \\FileSystem\\Ntfs\n\n[CRITICAL: Suspicious drivers detected:\n1. \\Driver\\hidden at 0xfffff8000d200000 - suspicious name\n2. \\Driver\\rootkit at 0xfffff8000d300000 - obviously malicious name]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.modules.Modules",
+              "explanation": "List kernel modules from the official PsLoadedModuleList",
+              "use_case": "Comparing with driverscan to detect unlinked/hidden drivers",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  Base    Size    Name    Path\n\n0xfa801a234567  0xfffff80002600000      0x8f4000        ntoskrnl.exe    \\SystemRoot\\system32\\ntoskrnl.exe\n0xfa801a234678  0xfffff80002f00000      0x9a000 hal.dll \\SystemRoot\\system32\\hal.dll\n0xfa801a234789  0xfffff80002700000      0x45000 Afd.sys \\SystemRoot\\system32\\drivers\\Afd.sys\n0xfa801a23489a  0xfffff8000c100000      0x5000  disk.sys        \\SystemRoot\\system32\\drivers\\disk.sys\n0xfa801a2349ab  0xfffff80002900000      0x23000 HTTP.sys        \\SystemRoot\\system32\\drivers\\HTTP.sys\n0xfa801a234abc  0xfffff80002a00000      0x67000 tcpip.sys       \\SystemRoot\\system32\\drivers\\tcpip.sys\n0xfa801a234bcd  0xfffff80002b00000      0x89000 Ntfs.sys        \\SystemRoot\\system32\\drivers\\Ntfs.sys\n\n[ANALYSIS: Compare with driverscan output:\n- \\Driver\\hidden NOT in modules list = HIDDEN DRIVER (rootkit)\n- \\Driver\\rootkit NOT in modules list = HIDDEN DRIVER (rootkit)\nThese drivers are loaded but unlinked from the module list!]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.modscan.ModScan",
+              "explanation": "Pool scan for kernel modules to find hidden modules",
+              "use_case": "Finding kernel modules hidden via DKOM techniques",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  Base    Size    Name    Path\n\n0xfa801a234567  0xfffff80002600000      0x8f4000        ntoskrnl.exe    \\SystemRoot\\system32\\ntoskrnl.exe\n0xfa801a234678  0xfffff80002f00000      0x9a000 hal.dll \\SystemRoot\\system32\\hal.dll\n0xfa801a234789  0xfffff8000d200000      0x8000  hidden.sys      C:\\Windows\\Temp\\hidden.sys\n0xfa801a23489a  0xfffff8000d300000      0xa000  rootkit.sys     C:\\Users\\user\\Downloads\\rootkit.sys\n\n[FOUND: Hidden drivers with full paths:\n1. hidden.sys in C:\\Windows\\Temp\\ - suspicious location\n2. rootkit.sys in Downloads - MALICIOUS location for kernel driver]"
+            }
+          ],
+          "warnings": [
+            "Kernel-mode analysis requires understanding of Windows internals",
+            "Some legitimate security products use driver hiding techniques",
+            "Corrupted memory may cause false positives or missed drivers",
+            "Driver analysis should be combined with other rootkit detection methods"
+          ],
+          "best_practices": [
+            "Always compare driverscan vs modules vs modscan for discrepancies",
+            "Hidden drivers (in scan but not in list) are HIGH PRIORITY for investigation",
+            "Check driver paths - legitimate drivers are in System32\\drivers",
+            "Cross-reference driver files with filescan for extraction",
+            "Verify driver signatures if possible",
+            "Document all suspicious drivers for further analysis"
+          ],
+          "related_cves": [],
+          "related_topics": ["Rootkit Detection", "SSDT Analysis", "Kernel Analysis"]
+        },
+        {
+          "title": "Mutex Analysis for Malware Identification",
+          "keywords": ["mutantscan", "mutex", "mutexes", "malware mutex", "single instance", "malware identification"],
+          "difficulty": "intermediate",
+          "content": "Mutexes (mutants) are synchronization objects often used by malware to prevent multiple instances from running simultaneously. Each malware family typically uses unique mutex names, making them valuable for identification and threat intelligence. The mutantscan plugin scans for KMUTANT structures in memory pool. Malware mutexes often have: unique or random-looking names, names containing campaign identifiers, base64-like strings, and names referencing the malware family. Famous examples include 'DCRat-Mutex' for DCRat, various GUIDs for specific campaigns, and custom strings like 'Global\\\\[malwarename]'. Compare discovered mutexes against threat intelligence databases - matching mutex names can identify the malware family immediately. Legitimate mutexes typically have descriptive names related to application functionality. Unusual mutex names, especially in combination with suspicious processes, warrant investigation.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.mutantscan.MutantScan",
+              "explanation": "Scan memory for all mutex objects",
+              "use_case": "Finding malware identification mutexes and IOCs",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  Name\n\n0xfa801d234567  SM0:3232:304:WilStaging_02\n0xfa801d234678  __DDrawExclMode__\n0xfa801d234789  DBWinMutex\n0xfa801d23489a  Global\\SAMServProcessMutex\n0xfa801d2349ab  RasPbFile\n0xfa801d234abc  MALWARE_MUTEX_12345\n0xfa801d234bcd  Global\\8a34bc9d-1234-5678-abcd-ef1234567890\n0xfa801d234cde  CTF.Compart.MutexDefaultS-1-5-21-1234567890-1234567890-1234567890-1001\n0xfa801d234def  Global\\CLR_PerfMon_Finish_Event_1234\n0xfa801d234ef0  DCRAT-MTX-a7b2c3d4e5f6\n0xfa801d234f01  \\Sessions\\1\\BaseNamedObjects\\CobaltStrike_Pipe_12345\n\n[CRITICAL FINDINGS:\n1. MALWARE_MUTEX_12345 - obvious malware mutex\n2. DCRAT-MTX-a7b2c3d4e5f6 - DCRat RAT family\n3. CobaltStrike_Pipe_12345 - Cobalt Strike beacon indicator\n4. Global\\8a34bc9d-1234-5678... - GUID mutex common in malware campaigns]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.handles.Handles --pid 6672 | findstr Mutant",
+              "explanation": "Find mutexes held by specific suspicious process",
+              "use_case": "Identifying which mutex belongs to which malicious process",
+              "output_sample": "6672    malware.exe     0xfa801d234abc  0x28    Mutant  0x1f0001        \\Sessions\\0\\BaseNamedObjects\\MALWARE_MUTEX_12345\n6672    malware.exe     0xfa801d234bcd  0x2c    Mutant  0x1f0001        Global\\8a34bc9d-1234-5678-abcd-ef1234567890"
+            }
+          ],
+          "warnings": [
+            "Mutex names can be randomized by polymorphic malware",
+            "Some legitimate applications use GUID-based mutex names",
+            "Absence of known malware mutex doesn't mean system is clean",
+            "Malware may use multiple mutexes for different functions"
+          ],
+          "best_practices": [
+            "Compare mutex names against threat intelligence databases (VirusTotal, MITRE ATT&CK)",
+            "Document unique mutex names for IOC development",
+            "Cross-reference mutexes with process handles to identify owning process",
+            "Look for mutex patterns: random strings, GUIDs, malware family names",
+            "Use mutex names for detection rules (YARA, Sigma)",
+            "Search for mutex name in Google for malware family identification"
+          ],
+          "related_cves": [],
+          "related_topics": ["Handle Analysis", "Malware Identification", "Threat Intelligence"]
+        }
+      ]
+    },
+    {
+      "id": "credential_extraction",
+      "name": "Credential Extraction",
+      "topics": [
+        {
+          "title": "Password Hash Extraction with hashdump",
+          "keywords": ["hashdump", "password hashes", "NTLM", "LM hashes", "SAM database", "password cracking"],
+          "difficulty": "intermediate",
+          "content": "The hashdump plugin extracts Windows password hashes from the SAM (Security Accounts Manager) database in memory. This provides the same information as the SAM file but directly from memory, which may include accounts not on disk (domain cached credentials). The output includes: username, RID (Relative Identifier), LM hash (legacy, often empty on modern Windows), and NTLM hash. These hashes can be cracked offline using tools like Hashcat or John the Ripper, or used directly in Pass-the-Hash attacks. Important context: hashdump shows LOCAL accounts only. For domain accounts, use lsadump or mimikatz artifacts. Empty LM hash (aad3b435b51404ee) indicates LM hashing is disabled (good security). The NTLM hash is the primary target for cracking or PTH. From a forensics perspective, hashdump reveals: what local accounts exist, potential weak passwords after cracking, and evidence of compromised accounts if you find unexpected accounts.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.hashdump.Hashdump",
+              "explanation": "Extract password hashes from SAM database in memory",
+              "use_case": "Recovering local account password hashes for analysis",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nUser    rid     lmhash  nthash\n\nAdministrator   500     aad3b435b51404eeaad3b435b51404ee        31d6cfe0d16ae931b73c59d7e0c089c0\nGuest   501     aad3b435b51404eeaad3b435b51404ee        31d6cfe0d16ae931b73c59d7e0c089c0\nDefaultAccount  503     aad3b435b51404eeaad3b435b51404ee        31d6cfe0d16ae931b73c59d7e0c089c0\nWDAGUtilityAccount      504     aad3b435b51404eeaad3b435b51404ee        87a2cfa26f8f39c4d5c19d5c8e3a72b1\nuser    1001    aad3b435b51404eeaad3b435b51404ee        64f12cddaa88057e06a81b54e73b949b\nbackdoor        1002    aad3b435b51404eeaad3b435b51404ee        e19ccf75ee54e06b06a5907af13cef42\n\n[ANALYSIS:\n- LM hashes are all aad3b435b51404ee (empty) - LM disabled (good)\n- Administrator hash 31d6cfe0d16ae931b73c59d7e0c089c0 = empty password!\n- 'backdoor' account (RID 1002) - SUSPICIOUS, likely attacker-created\n- User 'user' hash can be cracked offline with hashcat -m 1000]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.hashdump.Hashdump -s",
+              "explanation": "Hashdump with extra security information if available",
+              "use_case": "Getting additional account metadata",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nUser    rid     lmhash  nthash\n\nAdministrator   500     aad3b435b51404eeaad3b435b51404ee        31d6cfe0d16ae931b73c59d7e0c089c0\nuser    1001    aad3b435b51404eeaad3b435b51404ee        64f12cddaa88057e06a81b54e73b949b\nbackdoor        1002    aad3b435b51404eeaad3b435b51404ee        e19ccf75ee54e06b06a5907af13cef42"
+            }
+          ],
+          "warnings": [
+            "Hashdump only shows LOCAL accounts, not domain accounts",
+            "Password cracking is time-consuming for strong passwords",
+            "Handle credential data carefully - may contain PII",
+            "Empty NTLM hash (31d6cfe0d16ae931b73c59d7e0c089c0) means empty password"
+          ],
+          "best_practices": [
+            "Look for unexpected local accounts (backdoor accounts created by attackers)",
+            "Crack hashes offline with hashcat: hashcat -m 1000 hashes.txt wordlist.txt",
+            "Empty password hashes indicate severe security weakness",
+            "Compare against known employee accounts for anomaly detection",
+            "Document all accounts and hashes for security audit",
+            "Use hashes for Pass-the-Hash testing in authorized pentests"
+          ],
+          "related_cves": [],
+          "related_topics": ["LSA Secrets", "Cached Credentials", "Mimikatz"]
+        },
+        {
+          "title": "LSA Secrets Extraction with lsadump",
+          "keywords": ["lsadump", "LSA secrets", "service passwords", "DefaultPassword", "cached credentials", "DPAPI"],
+          "difficulty": "advanced",
+          "content": "The lsadump plugin extracts LSA (Local Security Authority) secrets from memory. LSA secrets include: service account passwords (for services running as specific accounts), auto-logon passwords (DefaultPassword), cached domain credentials, DPAPI master keys, and other sensitive security data. This provides attackers with additional credentials beyond the SAM database. DefaultPassword is particularly concerning as it enables auto-logon and exposes plaintext passwords. Service passwords reveal credentials that may be reused across the network. $MACHINE.ACC is the machine account password for domain-joined computers. Extracting these secrets from memory gives the same results as running mimikatz sekurlsa::lsadump but through pure memory forensics. From an IR perspective, check for: unexpected services with stored passwords, auto-logon configured on servers, and credential exposure.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.lsadump.Lsadump",
+              "explanation": "Extract LSA secrets from memory including service passwords and cached credentials",
+              "use_case": "Finding additional credentials beyond local SAM hashes",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nKey     Secret\n\nDefaultPassword user_password_123!\n$MACHINE.ACC    <binary machine account password>\nDPAPI_SYSTEM    <DPAPI master key data>\nNL$KM   <cached domain credentials key material>\n_SC_BackupService       ServicePassword456!\n_SC_SQLServer   sql_admin_pwd_789\nASPNET_WP_PASSWORD      auto_generated_aspnet_pwd\n\n[CRITICAL FINDINGS:\n1. DefaultPassword = 'user_password_123!' - Auto-logon enabled with plaintext password!\n2. _SC_BackupService has password 'ServicePassword456!' - Service credential exposed\n3. _SC_SQLServer has 'sql_admin_pwd_789' - SQL service credential exposed\n\nThese passwords may be reused across the network - check for lateral movement!]"
+            }
+          ],
+          "warnings": [
+            "LSA secrets extraction may fail on some Windows versions",
+            "Credentials may be encrypted with DPAPI requiring additional decryption",
+            "Handle extracted credentials with extreme care - high sensitivity data",
+            "May not work on all memory dump formats"
+          ],
+          "best_practices": [
+            "Check for DefaultPassword indicating auto-logon configuration",
+            "Document all service account credentials for password rotation",
+            "Test extracted passwords for reuse across network (authorized only)",
+            "Compare service account passwords against enterprise password policy",
+            "Report DefaultPassword findings as critical security issues",
+            "Correlate with service list to understand credential exposure scope"
+          ],
+          "related_cves": [],
+          "related_topics": ["Hashdump", "Credential Theft", "Mimikatz"]
+        },
+        {
+          "title": "Detecting Mimikatz and Credential Theft Tools",
+          "keywords": ["mimikatz", "credential theft", "sekurlsa", "lsass", "credential dumping", "pass-the-hash"],
+          "difficulty": "advanced",
+          "content": "Mimikatz and similar credential theft tools leave artifacts in memory that can be detected through forensic analysis. Detection approaches include: finding mimikatz process (may be renamed), detecting access to lsass.exe from unusual processes, finding mimikatz strings in memory, identifying mimikatz module patterns, and detecting the results of credential dumping (plaintext passwords in memory). Key indicators: handles to lsass.exe from non-security processes, RWX memory in lsass containing credential data, specific Mimikatz strings like 'sekurlsa', 'logonpasswords', 'wdigest', and presence of credential structures outside normal lsass memory. YARA rules for Mimikatz signatures are highly effective. Also check for: procdump.exe usage (lsass dumping), comsvcs.dll!MiniDump abuse, and direct lsass memory reading attempts. The presence of any credential theft tool indicates serious compromise requiring immediate response.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp yarascan.YaraScan --yara-rules \"rule mimikatz_strings { strings: $a = \\\"sekurlsa\\\" $b = \\\"logonpasswords\\\" $c = \\\"wdigest\\\" $d = \\\"kerberos\\\" $e = \\\"mimikatz\\\" condition: 2 of them }\"",
+              "explanation": "YARA scan for Mimikatz-related strings in memory",
+              "use_case": "Detecting Mimikatz usage or presence in memory",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  PID     Rule    Component       Value\n\n0x1a2345        6672    mimikatz_strings        $a      sekurlsa\n0x1a2400        6672    mimikatz_strings        $b      logonpasswords\n0x1a2500        6672    mimikatz_strings        $e      mimikatz 2.2.0 (x64)\n0x1a2600        6672    mimikatz_strings        $c      wdigest\n\n[CRITICAL: Mimikatz detected in PID 6672!\n- sekurlsa module present\n- logonpasswords command executed\n- wdigest credential extraction attempted\nThis system is actively compromised!]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.handles.Handles | findstr -i lsass",
+              "explanation": "Find processes with handles to lsass.exe - credential theft indicator",
+              "use_case": "Detecting unauthorized access to lsass process",
+              "output_sample": "500     lsass.exe       0xfa801b234567  0x4     Process 0x1fffff        <unnamed>\n4256    powershell.exe  0xfa801b234678  0x24    Process 0x1478  lsass.exe\n6672    malware.exe     0xfa801b234789  0x28    Process 0x1fffff        lsass.exe\n\n[CRITICAL: Unauthorized lsass access detected:\n- PID 4256 (powershell.exe) has handle to lsass with 0x1478 access rights\n- PID 6672 (malware.exe) has FULL ACCESS (0x1fffff) to lsass!\nThese processes are attempting or performing credential theft!]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.cmdline.CmdLine | findstr -i \"sekurlsa lsass procdump comsvcs\"",
+              "explanation": "Find command lines related to credential dumping tools and techniques",
+              "use_case": "Identifying credential theft commands executed",
+              "output_sample": "6672    malware.exe     .\\mimikatz.exe \"sekurlsa::logonpasswords\" exit\n4892    cmd.exe procdump.exe -ma lsass.exe lsass.dmp\n5123    rundll32.exe    C:\\Windows\\System32\\comsvcs.dll MiniDump 500 C:\\temp\\lsass.dmp full"
+            }
+          ],
+          "warnings": [
+            "Mimikatz is often renamed to evade detection - rely on behavior not just names",
+            "Credential theft may have already occurred even if tool is no longer in memory",
+            "Legitimate security tools may access lsass - verify before raising alarm",
+            "Memory may be partially overwritten - absence doesn't guarantee safety"
+          ],
+          "best_practices": [
+            "Use YARA rules for comprehensive Mimikatz and credential tool detection",
+            "Check handles to lsass from ALL processes - unauthorized access is critical",
+            "Look for lsass dump files (procdump, comsvcs MiniDump techniques)",
+            "Correlate with network analysis for credential exfiltration",
+            "Check cmdline for credential dumping commands",
+            "Assume all credentials compromised if credential theft tools are found"
+          ],
+          "related_cves": [],
+          "related_topics": ["Hashdump", "LSA Secrets", "YARA Scanning"]
+        }
+      ]
+    },
+    {
+      "id": "rootkit_detection",
+      "name": "Rootkit Detection",
+      "topics": [
+        {
+          "title": "SSDT Hooking Detection",
+          "keywords": ["SSDT", "System Service Descriptor Table", "SSDT hooking", "syscall hooking", "kernel hooks", "rootkit detection"],
+          "difficulty": "advanced",
+          "content": "The SSDT (System Service Descriptor Table) contains pointers to kernel functions that handle system calls. Rootkits can modify these pointers to redirect system calls to their own malicious handlers, enabling process hiding, file hiding, and other stealth techniques. The ssdt plugin in Volatility displays the SSDT entries and identifies hooks by checking if function pointers point outside the expected kernel module (ntoskrnl.exe). A hooked entry will show a function address in a different module - often the rootkit driver. Key analysis: compare function addresses against expected ntoskrnl range, identify which syscalls are hooked (NtQuerySystemInformation for process hiding, NtQueryDirectoryFile for file hiding), and correlate with suspicious drivers. Modern Windows (x64 with PatchGuard) makes SSDT hooking harder but not impossible - rootkits may use other techniques or disable PatchGuard. Historical SSDT hooking is still relevant for older systems and some advanced rootkits.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.ssdt.SSDT",
+              "explanation": "Display SSDT entries to detect system call hooks",
+              "use_case": "Finding rootkit hooks in the System Service Descriptor Table",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nIndex   Address Module  Symbol\n\n0       0xfffff80002a12340      ntoskrnl.exe    NtAccessCheck\n1       0xfffff80002a13450      ntoskrnl.exe    NtWorkerFactoryWorkerReady\n2       0xfffff80002a14560      ntoskrnl.exe    NtAcceptConnectPort\n...\n65      0xfffff8000d205678      rootkit.sys     NtQuerySystemInformation [HOOKED!]\n66      0xfffff80002a18790      ntoskrnl.exe    NtQuerySymbolicLinkObject\n...\n122     0xfffff8000d206789      rootkit.sys     NtQueryDirectoryFile [HOOKED!]\n...\n189     0xfffff80002a23890      ntoskrnl.exe    NtSetInformationFile\n\n[CRITICAL: SSDT Hooks Detected!\n- Index 65: NtQuerySystemInformation hooked by rootkit.sys\n  -> Used to hide processes from Task Manager and pslist\n- Index 122: NtQueryDirectoryFile hooked by rootkit.sys\n  -> Used to hide files and directories\n\nThis system has an active kernel rootkit!]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.ssdt.SSDT | findstr -v ntoskrnl",
+              "explanation": "Filter SSDT output to show only hooked entries (non-ntoskrnl)",
+              "use_case": "Quickly identifying all SSDT hooks",
+              "output_sample": "65      0xfffff8000d205678      rootkit.sys     NtQuerySystemInformation\n122     0xfffff8000d206789      rootkit.sys     NtQueryDirectoryFile\n156     0xfffff8000d207890      hidden.sys      NtEnumerateValueKey"
+            }
+          ],
+          "warnings": [
+            "Some legitimate security software hooks SSDT (AV, HIPS) - verify before assuming malicious",
+            "PatchGuard on modern Windows makes persistent SSDT hooks harder",
+            "Rootkits may use other hooking techniques (inline, IRP, filter drivers)",
+            "32-bit and 64-bit SSDT analysis differs - ensure correct analysis"
+          ],
+          "best_practices": [
+            "Any function pointing outside ntoskrnl.exe should be investigated",
+            "Cross-reference hooked functions with driverscan to identify hooking driver",
+            "Common rootkit hooks: NtQuerySystemInformation, NtQueryDirectoryFile, NtEnumerateValueKey",
+            "Compare SSDT against known-good baseline if available",
+            "Use multiple rootkit detection techniques - SSDT is just one vector",
+            "Document all hooks for remediation planning"
+          ],
+          "related_cves": [],
+          "related_topics": ["Driver Analysis", "Callback Detection", "Inline Hooks"]
+        },
+        {
+          "title": "Callback and Notification Detection",
+          "keywords": ["callbacks", "notification routines", "PsSetCreateProcessNotifyRoutine", "CmRegisterCallback", "kernel callbacks", "rootkit persistence"],
+          "difficulty": "advanced",
+          "content": "Windows provides legitimate kernel callback mechanisms that rootkits abuse for persistence and monitoring. The callbacks plugin enumerates registered callback routines including: PsSetCreateProcessNotifyRoutine (process creation/termination), PsSetCreateThreadNotifyRoutine (thread creation), PsSetLoadImageNotifyRoutine (image/DLL loading), CmRegisterCallback (registry operations), ObRegisterCallbacks (object manager), and filesystem filter callbacks. Rootkits register malicious callbacks to: monitor all process creation, log all registry access, intercept file operations, hide malicious activity, and maintain persistence. Legitimate callbacks come from security software, Windows itself, and system drivers. Suspicious callbacks: those registered by unsigned drivers, drivers from unusual paths, or drivers matching known malware. Cross-reference callback owners with driver analysis to identify malicious registrations.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.callbacks.Callbacks",
+              "explanation": "Enumerate all kernel callbacks to detect rootkit registration",
+              "use_case": "Finding malicious kernel callback registrations",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nType    Callback        Module  Detail\n\nPsSetCreateProcessNotifyRoutine 0xfffff80002345678      ntoskrnl.exe    PspCreateProcessNotifyRoutine\nPsSetCreateProcessNotifyRoutine 0xfffff80004567890      WdFilter.sys    Windows Defender callback\nPsSetCreateProcessNotifyRoutine 0xfffff8000d201234      rootkit.sys     <unknown>\nPsSetCreateThreadNotifyRoutine  0xfffff80002456789      ntoskrnl.exe    PspCreateThreadNotifyRoutine\nPsSetLoadImageNotifyRoutine     0xfffff80002567890      ntoskrnl.exe    PsLoadImageNotifyRoutine\nPsSetLoadImageNotifyRoutine     0xfffff8000d202345      hidden.sys      <unknown>\nCmRegisterCallback      0xfffff80002678901      ntoskrnl.exe    CmpCallbackEntry\nCmRegisterCallback      0xfffff8000d203456      rootkit.sys     <unknown>\nObRegisterCallbacks     0xfffff80002789012      ntoskrnl.exe    ObpCallPreOperationCallbacks\nIoRegisterFsRegistrationChange  0xfffff80002890123      Ntfs.sys        NtfsFsNotification\n\n[CRITICAL: Malicious callbacks detected!\n- PsSetCreateProcessNotifyRoutine hooked by rootkit.sys\n  -> Monitors all process creation/termination\n- PsSetLoadImageNotifyRoutine hooked by hidden.sys\n  -> Monitors all DLL/driver loading\n- CmRegisterCallback hooked by rootkit.sys\n  -> Monitors all registry operations\n\nThe rootkit is monitoring all system activity!]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.callbacks.Callbacks | findstr -v ntoskrnl | findstr -v WdFilter",
+              "explanation": "Filter out known-good callbacks to focus on suspicious ones",
+              "use_case": "Isolating potentially malicious callback registrations",
+              "output_sample": "PsSetCreateProcessNotifyRoutine 0xfffff8000d201234      rootkit.sys     <unknown>\nPsSetLoadImageNotifyRoutine     0xfffff8000d202345      hidden.sys      <unknown>\nCmRegisterCallback      0xfffff8000d203456      rootkit.sys     <unknown>"
+            }
+          ],
+          "warnings": [
+            "Many legitimate security products use callbacks - don't assume all are malicious",
+            "Some callbacks may be unresolved to module names - investigate manually",
+            "Rootkits may unregister callbacks before memory capture (anti-forensics)",
+            "Callback analysis requires understanding of Windows internals"
+          ],
+          "best_practices": [
+            "Cross-reference callback modules with driverscan/modscan",
+            "Check if callback module is signed and from legitimate vendor",
+            "Focus on process notify, image load, and registry callbacks - common rootkit targets",
+            "Compare against baseline of known-good callbacks",
+            "Callbacks from Temp directories or user paths are HIGH PRIORITY",
+            "Document all suspicious callbacks for incident response"
+          ],
+          "related_cves": [],
+          "related_topics": ["SSDT Detection", "Driver Analysis", "IRP Hooks"]
+        },
+        {
+          "title": "Detecting Hidden Processes and DKOM",
+          "keywords": ["DKOM", "Direct Kernel Object Manipulation", "hidden processes", "unlinked processes", "process hiding", "rootkit techniques"],
+          "difficulty": "advanced",
+          "content": "Direct Kernel Object Manipulation (DKOM) is a rootkit technique that manipulates kernel data structures to hide processes, drivers, and other objects. For process hiding, rootkits unlink the EPROCESS structure from the ActiveProcessLinks list while keeping the process running. Detection relies on cross-validation: compare pslist (walks linked list) with psscan (scans memory pools). Processes in psscan but not pslist are hidden. Other DKOM techniques include: driver unlinking (modscan vs modules), handle table manipulation, and object header corruption. Detection methodology: run multiple enumeration plugins that use different detection methods, compare outputs, and investigate discrepancies. Note that terminated processes also appear in psscan but not pslist - check ExitTime to differentiate. DKOM detection is a core memory forensics skill for identifying advanced threats.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.pslist.PsList",
+              "explanation": "Standard process list - walks ActiveProcessLinks",
+              "use_case": "Baseline process enumeration (may miss hidden processes)",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nPID     PPID    ImageFileName   Offset(V)       Threads Handles SessionId       Wow64   CreateTime      ExitTime\n\n4       0       System  0xfa8018d41040  108     -       N/A     False   2024-01-15 08:23:11.000000      N/A\n260     4       smss.exe        0xfa801a2c5080  2       29      N/A     False   2024-01-15 08:23:11.000000      N/A\n492     392     services.exe    0xfa801a4e8300  7       224     0       False   2024-01-15 08:23:15.000000      N/A\n500     392     lsass.exe       0xfa801a4ec2c0  8       765     0       False   2024-01-15 08:23:15.000000      N/A\n2156    2144    explorer.exe    0xfa801ac78340  47      1876    1       False   2024-01-15 08:25:02.000000      N/A\n4256    4128    powershell.exe  0xfa801bd23080  12      412     1       False   2024-01-15 09:45:18.000000      N/A"
+            },
+            {
+              "command": "vol -f memory.dmp windows.psscan.PsScan",
+              "explanation": "Pool scanning for EPROCESS - finds hidden and terminated processes",
+              "use_case": "Detecting DKOM-hidden processes by comparing with pslist",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nPID     PPID    ImageFileName   Offset(V)       Threads Handles SessionId       Wow64   CreateTime      ExitTime\n\n4       0       System  0xfa8018d41040  108     -       N/A     False   2024-01-15 08:23:11.000000      N/A\n260     4       smss.exe        0xfa801a2c5080  2       29      N/A     False   2024-01-15 08:23:11.000000      N/A\n492     392     services.exe    0xfa801a4e8300  7       224     0       False   2024-01-15 08:23:15.000000      N/A\n500     392     lsass.exe       0xfa801a4ec2c0  8       765     0       False   2024-01-15 08:23:15.000000      N/A\n2156    2144    explorer.exe    0xfa801ac78340  47      1876    1       False   2024-01-15 08:25:02.000000      N/A\n4256    4128    powershell.exe  0xfa801bd23080  12      412     1       False   2024-01-15 09:45:18.000000      N/A\n6672    500     rootkit.exe     0xfa801de89080  2       45      0       False   2024-01-15 10:12:34.000000      N/A\n7234    6672    backdoor.exe    0xfa801df12340  3       67      0       False   2024-01-15 10:12:45.000000      N/A\n\n[CRITICAL: HIDDEN PROCESSES DETECTED!\nComparing pslist vs psscan:\n- PID 6672 (rootkit.exe) - In psscan, NOT in pslist = DKOM HIDDEN!\n- PID 7234 (backdoor.exe) - In psscan, NOT in pslist = DKOM HIDDEN!\n\nThese processes are running but hidden from normal enumeration!]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.modules.Modules && vol -f memory.dmp windows.modscan.ModScan",
+              "explanation": "Compare module list with modscan to detect hidden drivers",
+              "use_case": "Detecting DKOM-hidden kernel drivers",
+              "output_sample": "[Modules output - official list]\nntoskrnl.exe, hal.dll, Afd.sys, disk.sys, Tcpip.sys, Ntfs.sys\n\n[ModScan output - pool scan]\nntoskrnl.exe, hal.dll, Afd.sys, disk.sys, Tcpip.sys, Ntfs.sys, rootkit.sys, hidden.sys\n\n[ANALYSIS: Hidden drivers detected:\n- rootkit.sys - in modscan, NOT in modules = HIDDEN\n- hidden.sys - in modscan, NOT in modules = HIDDEN]"
+            }
+          ],
+          "warnings": [
+            "Terminated processes also appear in psscan but not pslist - check ExitTime",
+            "Some rootkits also manipulate pool tags to evade psscan",
+            "Memory corruption can cause false positives",
+            "DKOM detection is one part of comprehensive rootkit detection"
+          ],
+          "best_practices": [
+            "Always run both pslist AND psscan - compare for discrepancies",
+            "Always run both modules AND modscan - compare for hidden drivers",
+            "Check ExitTime - hidden processes have empty ExitTime, terminated have timestamps",
+            "Cross-reference hidden processes with netscan for network activity",
+            "Hidden processes are HIGH PRIORITY - investigate immediately",
+            "Document all hidden objects for incident response"
+          ],
+          "related_cves": [],
+          "related_topics": ["Process Enumeration", "Driver Analysis", "SSDT Hooks"]
+        }
+      ]
+    }
+  ]
+}

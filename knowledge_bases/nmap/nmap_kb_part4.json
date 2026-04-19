@@ -1,0 +1,181 @@
+{
+  "knowledge_base_part": 4,
+  "categories": [
+    {
+      "id": "ssh_scanning",
+      "name": "SSH Scanning",
+      "topics": [
+        {
+          "title": "SSH Enumeration and Backporting Verification",
+          "keywords": ["SSH scanning", "OpenSSH", "ssh-auth-methods", "ssh-hostkey", "backporting", "CVE-2016-6210", "CVE-2018-15473", "ssh-audit"],
+          "difficulty": "advanced",
+          "content": "CRITICAL: SSH version banners DO NOT reflect actual patch status on Ubuntu/Debian due to backporting. OpenSSH 7.2p2 on Ubuntu may be fully patched. Scripts: ssh-auth-methods (auth types without login), ssh-hostkey (key fingerprints), ssh2-enum-algos (ciphers/algorithms). To verify actual patches: use ssh-audit tool, check dpkg -l openssh-server, test for specific CVEs. CVE-2016-6210 and CVE-2018-15473 allow user enumeration.",
+          "examples": [
+            {"command": "nmap -p 22 --script ssh-auth-methods 192.168.1.1", "explanation": "Enumerate allowed auth methods", "use_case": "Check if password auth enabled"},
+            {"command": "nmap -p 22 --script ssh-hostkey 192.168.1.1", "explanation": "Get SSH host key fingerprints", "use_case": "Key verification and inventory"},
+            {"command": "nmap -p 22 --script ssh2-enum-algos 192.168.1.1", "explanation": "Enumerate supported algorithms", "use_case": "Weak cipher/algorithm detection"},
+            {"command": "nmap -p 22 -sV 192.168.1.1 && ssh-audit 192.168.1.1", "explanation": "Nmap version + ssh-audit for verification", "use_case": "Complete SSH security assessment"},
+            {"command": "nmap -p 22 --script ssh-brute --script-args userdb=users.txt,brute.delay=5s 192.168.1.1", "explanation": "SSH brute with delay (use with caution)", "use_case": "Credential testing with rate limiting"}
+          ],
+          "warnings": ["Banner version DOES NOT indicate patch status", "Ubuntu backports security patches without version change", "ssh-brute may be blocked by fail2ban", "User enumeration CVEs require specific testing"],
+          "best_practices": ["Never trust SSH version banner for vulnerability assessment", "Use ssh-audit for comprehensive analysis", "Check dpkg -l openssh-server on Ubuntu/Debian", "Test specific CVEs rather than relying on version"],
+          "related_cves": ["CVE-2016-6210", "CVE-2018-15473", "CVE-2016-0777", "CVE-2016-0778"],
+          "related_topics": ["False Positives", "Backporting", "Version Detection"]
+        },
+        {
+          "title": "SSH User Enumeration Vulnerabilities",
+          "keywords": ["SSH user enumeration", "CVE-2018-15473", "CVE-2016-6210", "username enumeration", "timing attack"],
+          "difficulty": "advanced",
+          "content": "CVE-2018-15473 (OpenSSH < 7.7): Timing-based user enumeration via malformed packets. Invalid users get immediate rejection; valid users trigger delayed response. CVE-2016-6210 (OpenSSH < 7.3): Similar timing attack via long passwords. Both require specific tools/scripts for exploitation. Nmap's ssh-brute may indicate valid users via response timing but dedicated tools like ssh-user-enum are more reliable.",
+          "examples": [
+            {"command": "nmap -p 22 -sV 192.168.1.1", "explanation": "First check OpenSSH version", "use_case": "Determine if user enum CVEs apply"},
+            {"command": "ssh-audit 192.168.1.1 | grep -i CVE", "explanation": "Check ssh-audit for CVE status", "use_case": "Verify specific vulnerability presence"}
+          ],
+          "warnings": ["Version banner doesn't confirm vulnerability due to backporting", "Tools may produce false positives", "Testing generates auth log entries"],
+          "best_practices": ["Verify with dedicated user enumeration tools", "Check actual patch status not just version", "Document methodology in reports"],
+          "related_cves": ["CVE-2018-15473", "CVE-2016-6210"],
+          "related_topics": ["SSH Scanning", "Version Verification"]
+        }
+      ]
+    },
+    {
+      "id": "real_world_scenarios",
+      "name": "Real-World Pentesting Scenarios",
+      "topics": [
+        {
+          "title": "External Network Reconnaissance Workflow",
+          "keywords": ["external recon", "perimeter scanning", "external pentest", "attack surface", "reconnaissance workflow"],
+          "difficulty": "advanced",
+          "content": "Phase 1: Passive recon (DNS, OSINT, certificates). Phase 2: Port discovery with stealth (-T2, --max-rate 100). Phase 3: Service enumeration (-sV) on discovered ports. Phase 4: Vulnerability scanning (NSE scripts). Phase 5: Manual verification of findings. Use slow timing for external scans to avoid detection. Prioritize: exposed management interfaces, VPN endpoints, web apps, email servers.",
+          "examples": [
+            {"command": "nmap -T2 --max-rate 50 -sS -p- --randomize-hosts -oA external_fullscan client_ips.txt", "explanation": "Stealthy full port scan of external perimeter", "use_case": "Initial external reconnaissance"},
+            {"command": "nmap -T3 -sV -sC -p $(cat discovered_ports.txt) -oA external_services client_ips.txt", "explanation": "Service enum on discovered ports", "use_case": "Detailed service analysis"},
+            {"command": "nmap -p 443,8443 --script ssl-*,http-vuln-* -oA external_web client_ips.txt", "explanation": "Web/SSL vulnerability scanning", "use_case": "Web attack surface assessment"}
+          ],
+          "warnings": ["External scanning may violate laws without authorization", "ISP may notice/block scanning", "Client firewall logs will show activity"],
+          "best_practices": ["Get written authorization", "Start with slow, stealthy scans", "Document all activity with timestamps", "Verify critical findings manually"],
+          "related_cves": [],
+          "related_topics": ["IDS Evasion", "Timing", "Web Scanning"]
+        },
+        {
+          "title": "Internal Network Scanning Workflow",
+          "keywords": ["internal scan", "internal pentest", "network enumeration", "lateral movement", "internal recon"],
+          "difficulty": "advanced",
+          "content": "Internal scanning can be faster (-T4) since stealth less critical. Phase 1: Host discovery (nmap -sn). Phase 2: Quick port scan (-F or --top-ports). Phase 3: Detailed scan of interesting hosts (-p-). Phase 4: Service/vulnerability scanning. Prioritize: Domain Controllers (88,389,445), file servers (445), databases (1433,3306), web apps (80,443), management (22,3389,5985).",
+          "examples": [
+            {"command": "nmap -sn 192.168.0.0/16 -oA host_discovery", "explanation": "Host discovery on large internal network", "use_case": "Finding live hosts"},
+            {"command": "nmap -T4 -F -oA quick_scan $(cat live_hosts.txt)", "explanation": "Fast scan of live hosts", "use_case": "Initial port discovery"},
+            {"command": "nmap -T4 -sV -sC -p 22,80,443,445,3389 -oA common_services 192.168.1.0/24", "explanation": "Common services with version detection", "use_case": "Quick wins identification"},
+            {"command": "nmap -p 445 --script=smb-enum-*,smb-vuln-*,smb-os-discovery 192.168.1.0/24", "explanation": "Windows/SMB deep dive", "use_case": "AD environment assessment"}
+          ],
+          "warnings": ["Still need authorization for internal scans", "Avoid production-impacting timing", "Document scope carefully"],
+          "best_practices": ["Start with host discovery", "Use faster timing for internal", "Prioritize high-value targets", "Coordinate with IT for sensitive systems"],
+          "related_cves": [],
+          "related_topics": ["SMB Enumeration", "Active Directory"]
+        },
+        {
+          "title": "Integration with Metasploit",
+          "keywords": ["Metasploit", "msfconsole", "db_nmap", "exploitation", "workspace", "nmap to metasploit"],
+          "difficulty": "advanced",
+          "content": "Metasploit imports Nmap XML directly. In msfconsole: db_nmap runs Nmap and auto-imports. db_import loads existing XML. hosts/services commands query imported data. vulns shows vulnerability correlations. Workflow: Nmap discovery → Import to MSF → Search exploits → Validate → Exploit. Use workspaces to organize different engagements.",
+          "examples": [
+            {"command": "msfconsole -q -x 'db_nmap -sV -sC 192.168.1.0/24'", "explanation": "Run Nmap from within Metasploit", "use_case": "Integrated scanning and exploitation"},
+            {"command": "msfconsole -q -x 'db_import scan.xml; hosts; services'", "explanation": "Import existing Nmap XML", "use_case": "Loading previous reconnaissance"},
+            {"command": "msfconsole -q -x 'db_import scan.xml; vulns'", "explanation": "Import and check vulnerability correlations", "use_case": "Finding exploitable services"},
+            {"command": "msfconsole -q -x 'workspace -a client1; db_nmap -T4 -sV 192.168.1.0/24'", "explanation": "Create workspace and scan", "use_case": "Organized engagement workflow"}
+          ],
+          "warnings": ["Metasploit DB requires PostgreSQL setup", "Large imports may be slow", "Keep workspaces organized"],
+          "best_practices": ["Use workspaces per engagement", "Import all Nmap scans for correlation", "Review services before exploitation"],
+          "related_cves": [],
+          "related_topics": ["Output Formats", "Vulnerability Scanning"]
+        },
+        {
+          "title": "Active Directory Enumeration",
+          "keywords": ["Active Directory", "AD scanning", "domain controller", "Kerberos", "LDAP", "domain enumeration"],
+          "difficulty": "advanced",
+          "content": "Identify DCs via DNS (nslookup -type=srv _ldap._tcp.dc._msdcs.domain), port 88 (Kerberos), or 389 (LDAP). Key ports: 88 (Kerberos), 389/636 (LDAP/S), 445 (SMB), 464 (Kpasswd), 3268/3269 (Global Catalog). Use ldap-rootdse for domain info, smb-os-discovery for computer accounts, smb-enum-users for domain users if null sessions allowed.",
+          "examples": [
+            {"command": "nmap -p 88,389,445,636 192.168.1.0/24 -oG - | grep 'open.*open'", "explanation": "Find potential Domain Controllers", "use_case": "DC identification"},
+            {"command": "nmap -p 389 --script ldap-rootdse 192.168.1.10", "explanation": "Query DC for domain info", "use_case": "Domain reconnaissance"},
+            {"command": "nmap -p 445 --script smb-os-discovery,smb-enum-domains 192.168.1.10", "explanation": "SMB-based AD enumeration", "use_case": "Domain structure discovery"},
+            {"command": "nmap -p 88 --script krb5-enum-users --script-args krb5-enum-users.realm='CORP.LOCAL' 192.168.1.10", "explanation": "Kerberos user enumeration", "use_case": "Valid username discovery"}
+          ],
+          "warnings": ["Kerberos enumeration may trigger alerts", "Heavy AD scanning detected by SIEM", "Some scripts need valid credentials"],
+          "best_practices": ["Identify all DCs first", "Use multiple enumeration techniques", "Document trust relationships"],
+          "related_cves": [],
+          "related_topics": ["LDAP Enumeration", "SMB Enumeration", "Kerberos"]
+        }
+      ]
+    },
+    {
+      "id": "false_positives",
+      "name": "False Positives and Verification",
+      "topics": [
+        {
+          "title": "Ubuntu/Debian Backporting Explained",
+          "keywords": ["backporting", "Ubuntu", "Debian", "false positive", "version mismatch", "security patches", "dpkg"],
+          "difficulty": "advanced",
+          "content": "CRITICAL CONCEPT: Ubuntu and Debian backport security patches to older package versions WITHOUT changing the version number. OpenSSH 7.2p2 on Ubuntu 16.04 may have ALL security patches applied despite showing an 'old' version. This causes massive false positives in vulnerability scanners that rely on version banners. NEVER report vulnerabilities based solely on version numbers for Debian-based systems. Verification required: dpkg -l <package>, apt-cache policy <package>, or check Ubuntu Security Notices.",
+          "examples": [
+            {"command": "dpkg -l openssh-server", "explanation": "Check actual installed package version with patch level", "use_case": "Verify OpenSSH patch status on target"},
+            {"command": "apt-cache policy openssh-server", "explanation": "Show package version and repository", "use_case": "Detailed package information"},
+            {"command": "dpkg -l | grep -E 'apache|nginx|php|mysql'", "explanation": "Check multiple packages", "use_case": "Verify common service patch status"},
+            {"command": "cat /var/log/dpkg.log | grep upgrade", "explanation": "Check recent package updates", "use_case": "Verify patching activity"}
+          ],
+          "warnings": ["Version banners are UNRELIABLE on Ubuntu/Debian", "Scanners report massive false positives", "Must verify each 'vulnerability' finding", "RHEL/CentOS also backport but differently"],
+          "best_practices": ["NEVER report version-based vulns without verification", "Use dpkg -l on target if you have access", "Cross-reference Ubuntu Security Notices", "Use specialized tools (ssh-audit, testssl.sh)"],
+          "related_cves": [],
+          "related_topics": ["SSH Scanning", "Version Detection", "Verification"]
+        },
+        {
+          "title": "Version Banner vs Actual Patches",
+          "keywords": ["version verification", "patch verification", "false positive", "vulnerability verification", "banner vs patch"],
+          "difficulty": "advanced",
+          "content": "Version banners reflect upstream version, not security status. Examples: OpenSSH 7.2p2 banner on Ubuntu 18.04 has CVE-2016-6210 patched. Apache 2.4.29 on Ubuntu has CVE-2021-41773 patched. PHP 7.2.24 on Debian has numerous CVEs patched. Verification methods: Package manager queries (dpkg, rpm), security tool outputs (ssh-audit, testssl.sh), vendor security advisories, manual CVE testing.",
+          "examples": [
+            {"command": "ssh-audit 192.168.1.1", "explanation": "Comprehensive SSH security analysis beyond version", "use_case": "True SSH vulnerability assessment"},
+            {"command": "testssl.sh 192.168.1.1:443", "explanation": "Deep SSL/TLS testing beyond Nmap", "use_case": "True TLS vulnerability assessment"},
+            {"command": "nmap -sV -p 22 192.168.1.1 --script-args=unsafe=1", "explanation": "Aggressive version detection", "use_case": "More thorough fingerprinting"},
+            {"command": "curl -I https://192.168.1.1/ 2>/dev/null | grep -i server", "explanation": "Direct banner check for comparison", "use_case": "Manual verification"}
+          ],
+          "warnings": ["Never trust version alone for vulnerability status", "Automated scanners produce many false positives", "Manual verification essential for accurate reporting"],
+          "best_practices": ["Use multiple verification methods", "Cross-reference vendor security advisories", "Test exploitability in controlled conditions", "Document verification methodology in reports"],
+          "related_cves": [],
+          "related_topics": ["Backporting", "Version Detection"]
+        },
+        {
+          "title": "Common False Positive Examples",
+          "keywords": ["false positive examples", "OpenSSH false positive", "Apache false positive", "verification examples"],
+          "difficulty": "advanced",
+          "content": "OpenSSH on Ubuntu: Banner shows 7.6p1, scanner reports CVE-2018-15473 - VERIFY with ssh-audit, likely patched. Apache on Debian: Banner shows 2.4.25, scanner reports CVE-2021-41773 - CHECK dpkg -l apache2, likely patched. PHP on Ubuntu: Banner shows 7.2, scanner reports dozens of CVEs - VERIFY with php -v and apt-cache policy. OpenSSL: Banner shows 1.1.1, scanner reports Heartbleed - VERIFY version carefully, Heartbleed affects 1.0.1-1.0.1f only.",
+          "examples": [
+            {"command": "nmap -sV -p 22 target && ssh target 'dpkg -l openssh-server'", "explanation": "Compare Nmap banner with actual package", "use_case": "SSH vulnerability verification"},
+            {"command": "nmap -sV -p 80 target && curl -sI http://target/ | grep Server", "explanation": "Compare Nmap with direct banner", "use_case": "Web server verification"},
+            {"command": "nmap --script ssl-heartbleed -p 443 target", "explanation": "Direct CVE test rather than version-based", "use_case": "Testing actual vulnerability presence"}
+          ],
+          "warnings": ["Reporting unverified vulnerabilities damages credibility", "Client IT teams will dispute false positives", "Version-based scanning is fast but inaccurate"],
+          "best_practices": ["Always verify before reporting", "Use actual exploitation checks where safe", "Document verification steps", "Note 'potential' vs 'confirmed' in reports"],
+          "related_cves": [],
+          "related_topics": ["Backporting", "Report Writing"]
+        },
+        {
+          "title": "Verification Tools and Techniques",
+          "keywords": ["verification tools", "ssh-audit", "testssl.sh", "vulnerability verification", "exploit verification"],
+          "difficulty": "advanced",
+          "content": "ssh-audit: Comprehensive SSH analysis - algorithms, key exchange, actual CVE status beyond banners. testssl.sh: Deep SSL/TLS testing - all vulnerabilities, cipher analysis, certificate issues. nuclei: Template-based vulnerability verification. Manual testing: netcat/telnet for banner grabbing, curl for HTTP, openssl s_client for TLS. Package verification: dpkg -l (Debian), rpm -qa (RHEL), requires target access.",
+          "examples": [
+            {"command": "ssh-audit 192.168.1.1", "explanation": "Full SSH security audit", "use_case": "SSH vulnerability verification"},
+            {"command": "testssl.sh --vulnerable 192.168.1.1:443", "explanation": "Test for all SSL vulnerabilities", "use_case": "TLS vulnerability verification"},
+            {"command": "nuclei -u https://192.168.1.1 -t cves/", "explanation": "Template-based CVE verification", "use_case": "Automated but accurate vuln checking"},
+            {"command": "echo | openssl s_client -connect 192.168.1.1:443 2>/dev/null | openssl x509 -noout -text", "explanation": "Manual SSL certificate inspection", "use_case": "Certificate verification"},
+            {"command": "nmap --script vuln -p 80,443 192.168.1.1", "explanation": "Nmap vuln category scripts", "use_case": "Multi-vulnerability testing"}
+          ],
+          "warnings": ["Some verification tools may crash services", "nuclei templates vary in accuracy", "Manual testing takes time but is most reliable"],
+          "best_practices": ["Use multiple verification tools", "Start with non-invasive tests", "Document tool versions and output", "Prefer detection over exploitation when possible"],
+          "related_cves": [],
+          "related_topics": ["SSH Scanning", "SSL Scanning", "Vulnerability Assessment"]
+        }
+      ]
+    }
+  ]
+}

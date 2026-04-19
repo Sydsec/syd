@@ -1,0 +1,377 @@
+{
+  "knowledge_base_part": 7,
+  "categories": [
+    {
+      "id": "legal_authorization",
+      "name": "Legal & Authorization",
+      "topics": [
+        {
+          "title": "Scope Verification and Target Validation",
+          "keywords": ["scope", "authorization", "verification", "allowlist", "out-of-scope"],
+          "difficulty": "advanced",
+          "content": "SCOPE VERIFICATION IS CRITICAL: Scanning unauthorized targets is illegal in most jurisdictions. BEFORE SCANNING: (1) Verify target IP ranges in writing. (2) Confirm DNS names resolve to authorized IPs. (3) Check cloud IPs haven't rotated to another customer. (4) Verify hosting provider approval if required (AWS, Azure, shared hosting). TECHNIQUES: Resolve all targets before scanning: nmap -sL --resolve-all targets.txt. Use --exclude and --excludefile for out-of-scope ranges. Verify ownership: whois, ASN lookup, reverse DNS. DOCUMENTATION: Screenshot authorization documents. Log all scope verification steps. Timestamp all scans. CLOUD DANGER: Cloud IPs change frequently. 10.0.0.5 you scanned last week may be different customer today. Always re-verify cloud targets. SHARED HOSTING: One IP may host hundreds of sites. Authorization for site X doesn't authorize scanning all sites on that IP.",
+          "examples": [
+            {
+              "command": "nmap -sL --resolve-all -iL targets.txt -oN resolved_targets.txt",
+              "explanation": "List scan to verify DNS resolution before real scan",
+              "use_case": "Pre-scan target verification"
+            },
+            {
+              "command": "nmap -sS -p 80 --excludefile out_of_scope.txt 192.168.0.0/16",
+              "explanation": "Scan with explicit exclusions",
+              "use_case": "Avoiding out-of-scope ranges"
+            },
+            {
+              "command": "whois $(dig +short target.com) | grep -i 'org\\|netname\\|country'",
+              "explanation": "Verify IP ownership before scanning",
+              "use_case": "Target ownership confirmation"
+            },
+            {
+              "command": "nmap -sS -p 80,443 192.168.1.0/24 --reason -oA evidence_$(date +%Y%m%d_%H%M)",
+              "explanation": "Scan with timestamped output for evidence",
+              "use_case": "Creating audit trail"
+            },
+            {
+              "command": "echo '10.0.0.0/8' > exclude.txt && nmap --excludefile exclude.txt 0.0.0.0/0",
+              "explanation": "Extreme example: exclude private ranges from internet scan",
+              "use_case": "Ensuring no private IP leakage"
+            }
+          ],
+          "warnings": ["Unauthorized scanning is ILLEGAL - criminal penalties possible", "Cloud IPs can change owners rapidly", "Shared hosting complicates authorization", "CDN IPs may serve many unrelated customers"],
+          "best_practices": ["Get written authorization with specific IP ranges", "Re-verify targets before each engagement", "Use --excludefile for out-of-scope protection", "Log all scope verification steps"],
+          "related_cves": [],
+          "related_topics": ["Penetration Testing Law", "Rules of Engagement", "Evidence Handling"]
+        },
+        {
+          "title": "Evidence Preservation and Chain of Custody",
+          "keywords": ["evidence", "chain of custody", "logging", "timestamps", "forensics"],
+          "difficulty": "advanced",
+          "content": "EVIDENCE STANDARDS: Scan results may be used in legal proceedings, compliance audits, or incident response. PRESERVATION REQUIREMENTS: (1) Immutable timestamps - use -oA with date in filename. (2) Hash outputs - sha256sum scan.xml immediately after scan. (3) Full command line - log exact nmap command used. (4) Environment documentation - scanner IP, nmap version, OS. CHAIN OF CUSTODY: Document who ran scan, from where, when, and how results were stored. Use write-once storage (append-only logs, WORM storage). INTEGRITY: Store original files without modification. If processing needed, keep originals separate. REPORTING: Include methodology in reports - exact commands, timing, any issues encountered. LEGAL: Consult counsel before penetration testing. Understand local laws (CFAA in US, CMA in UK, etc.).",
+          "examples": [
+            {
+              "command": "nmap -sS -sV -oA scan_$(hostname)_$(date +%Y%m%d_%H%M%S) target && sha256sum scan_*.xml > checksums.txt",
+              "explanation": "Scan with hostname/timestamp naming and immediate hash",
+              "use_case": "Evidence-grade scan documentation"
+            },
+            {
+              "command": "echo \"Scan started: $(date -u +%Y-%m-%dT%H:%M:%SZ)\" >> scan_log.txt && nmap -sS -sV -oA evidence target 2>&1 | tee -a scan_log.txt",
+              "explanation": "Comprehensive logging with UTC timestamp",
+              "use_case": "Audit-ready scan logging"
+            },
+            {
+              "command": "nmap --version > evidence/environment.txt && ip addr >> evidence/environment.txt",
+              "explanation": "Document scanner environment",
+              "use_case": "Recording scan infrastructure details"
+            },
+            {
+              "command": "gpg --sign scan.xml",
+              "explanation": "Cryptographically sign scan results",
+              "use_case": "Non-repudiation for legal purposes"
+            }
+          ],
+          "warnings": ["Modifying original scan files destroys evidence value", "Unsigned/unhashed results can be disputed", "Timezone confusion in timestamps causes problems", "Lost chain of custody invalidates evidence"],
+          "best_practices": ["Use UTC timestamps consistently", "Hash all output files immediately", "Document complete methodology", "Store originals separately from working copies"],
+          "related_cves": [],
+          "related_topics": ["Digital Forensics", "Compliance", "Legal Considerations"]
+        },
+        {
+          "title": "Notification and Coordination Requirements",
+          "keywords": ["notification", "coordination", "ISP", "NOC", "rules of engagement"],
+          "difficulty": "advanced",
+          "content": "WHO TO NOTIFY: (1) Client IT/Security - always, with scheduled windows. (2) ISP/Hosting provider - if their terms require it. (3) MSSP/SOC - so they don't respond to your 'attack'. (4) Third-party vendors - if their infrastructure in scope. WHAT TO DOCUMENT IN ROE: (1) Authorized targets (IP ranges, domains). (2) Authorized techniques (scanning yes, exploitation TBD). (3) Timing windows (business hours, maintenance windows). (4) Emergency contacts (who to call if something breaks). (5) Stop conditions (when to halt testing). CLOUD PROVIDERS: AWS - no notification needed for most services you own, but check current policy. Azure - similar. GCP - similar. All prohibit scanning resources you don't own. INCIDENT RISK: Even authorized scans may trigger automated responses. Coordinate with SOC to prevent IP blocks, log correlation confusion, or incident response activation.",
+          "examples": [
+            {
+              "command": "# ROE checklist - not nmap command",
+              "explanation": "Verify before any scan: Written authorization? Correct scope? SOC notified? Emergency contacts?",
+              "use_case": "Pre-engagement checklist"
+            },
+            {
+              "command": "nmap -sS -T3 -p 1-1000 target --max-rate 50",
+              "explanation": "Rate-limited scan during agreed window",
+              "use_case": "Minimizing SOC alert noise"
+            },
+            {
+              "command": "nmap -sS -oA prescan_notification target && mail -s 'Scan starting' soc@client.com < /dev/null",
+              "explanation": "Document scan start with notification",
+              "use_case": "SOC coordination"
+            },
+            {
+              "command": "echo 'STOP: Client requested halt at 14:32 UTC' >> scan_log.txt",
+              "explanation": "Document stop conditions if triggered",
+              "use_case": "Recording engagement interruptions"
+            }
+          ],
+          "warnings": ["Uncoordinated scans may trigger incident response", "Cloud provider policy violations can terminate accounts", "SOC may block your IP mid-scan without coordination", "Third-party systems may have different authorization requirements"],
+          "best_practices": ["Always notify SOC before testing", "Have emergency contact on speed dial during scans", "Document all coordination in writing", "Confirm notification received before starting"],
+          "related_cves": [],
+          "related_topics": ["Rules of Engagement", "Incident Response", "Communication"]
+        }
+      ]
+    },
+    {
+      "id": "integration_automation",
+      "name": "Integration & Automation",
+      "topics": [
+        {
+          "title": "Nmap to Metasploit Integration",
+          "keywords": ["Metasploit", "db_import", "db_nmap", "MSF", "exploitation"],
+          "difficulty": "advanced",
+          "content": "METASPLOIT DATABASE: MSF uses PostgreSQL to store scan/exploit data. Nmap XML imports directly. METHODS: (1) db_import: Import existing nmap XML: db_import scan.xml. Creates hosts, services, vulns tables. (2) db_nmap: Run nmap directly from MSF: db_nmap -sV -O target. Results go straight to database. WORKFLOW: Scan with nmap -oX scan.xml, import to MSF, use 'services' command to find targets, 'vulns' to see vulnerability scripts findings. QUERIES: hosts - list discovered hosts. services -p 445 - find SMB. vulns - list vulnerability findings. HOST NOTES: nmap script output stored in notes table: notes -t nmap.* shows all nmap-sourced notes. WORKSPACE: Use 'workspace -a projectname' to organize. Keeps client data separate.",
+          "examples": [
+            {
+              "command": "msfconsole -q -x 'db_import /path/to/scan.xml; hosts; services; exit'",
+              "explanation": "One-liner to import and list findings",
+              "use_case": "Quick MSF import and review"
+            },
+            {
+              "command": "db_nmap -sV -sC -O 192.168.1.0/24",
+              "explanation": "Run nmap directly from msfconsole",
+              "use_case": "Integrated scanning in MSF session"
+            },
+            {
+              "command": "services -p 445 -R",
+              "explanation": "Find SMB services and set as RHOSTS",
+              "use_case": "Quick target selection for SMB exploits"
+            },
+            {
+              "command": "vulns -p 445 -S ms17-010",
+              "explanation": "Search for EternalBlue findings from nmap",
+              "use_case": "Vulnerability-based target selection"
+            },
+            {
+              "command": "workspace -a client_name && db_import *.xml",
+              "explanation": "Create workspace and import multiple scans",
+              "use_case": "Organizing multi-scan engagement"
+            }
+          ],
+          "warnings": ["db_nmap doesn't support all nmap options", "Large imports can slow MSF database", "XML parsing may fail on malformed files", "Workspace switching doesn't auto-save"],
+          "best_practices": ["Use workspaces to separate clients/engagements", "Import incrementally rather than one massive file", "Use services/hosts commands to verify import success", "Back up MSF database before major imports"],
+          "related_cves": [],
+          "related_topics": ["Metasploit Framework", "Database Management", "Exploitation Workflow"]
+        },
+        {
+          "title": "Parsing Nmap Output for Automation",
+          "keywords": ["parsing", "XML", "grep", "awk", "jq", "automation", "scripting"],
+          "difficulty": "advanced",
+          "content": "OUTPUT FORMATS: -oN (normal/human), -oG (grepable), -oX (XML), -oJ (JSON - newer versions). GREPABLE PARSING: Designed for unix tools. Format: Host: IP (hostname) Ports: port/state/proto/svc/version. COMMON EXTRACTIONS: IPs with open port: grep '/open/' scan.gnmap | awk '{print $2}'. Open ports for IP: grep 'Host: 10.0.0.1' scan.gnmap | grep -oP '\\d+/open'. XML PARSING: Most complete data. Python: python-nmap or libnmap libraries. jq for quick queries after converting to JSON. PYTHON EXAMPLE: from libnmap.parser import NmapParser; report = NmapParser.parse_fromfile('scan.xml'); for host in report.hosts: print(host.address, [s.port for s in host.services if s.state == 'open']). JQ EXAMPLE: nmap ... -oX - | xq '.nmaprun.host[]' (requires yq/xq for XML to JSON).",
+          "examples": [
+            {
+              "command": "grep '/open/' scan.gnmap | awk '{print $2}' | sort -u",
+              "explanation": "Extract unique IPs with any open port",
+              "use_case": "Building target list from discovery scan"
+            },
+            {
+              "command": "grep -oP '\\d+/open/tcp' scan.gnmap | cut -d/ -f1 | sort -u",
+              "explanation": "List all unique open TCP port numbers",
+              "use_case": "Understanding port distribution"
+            },
+            {
+              "command": "python3 -c \"from libnmap.parser import NmapParser; r=NmapParser.parse_fromfile('scan.xml'); print('\\n'.join([f'{h.address}:{s.port}' for h in r.hosts for s in h.services if s.state=='open']))\"",
+              "explanation": "Python one-liner to list IP:port pairs",
+              "use_case": "Scripted extraction for automation"
+            },
+            {
+              "command": "xsltproc scan.xml -o scan.html",
+              "explanation": "Convert XML to HTML report using builtin stylesheet",
+              "use_case": "Quick report generation"
+            },
+            {
+              "command": "grep 'Host:' scan.gnmap | grep -c 'open'",
+              "explanation": "Count hosts with at least one open port",
+              "use_case": "Quick stats from scan"
+            }
+          ],
+          "warnings": ["Grepable format doesn't include all XML data", "XML parsing requires handling large files carefully", "python-nmap library different from libnmap - check docs", "JSON output not available in older nmap versions"],
+          "best_practices": ["Always save XML for complete data preservation", "Use grepable for quick command-line analysis", "Develop reusable parsing scripts for consistent extraction", "Validate parsed data against original output"],
+          "related_cves": [],
+          "related_topics": ["Scripting", "Automation", "Reporting"]
+        },
+        {
+          "title": "CI/CD and Automated Scanning Pipelines",
+          "keywords": ["CI/CD", "pipeline", "DevSecOps", "automation", "scheduled scans"],
+          "difficulty": "advanced",
+          "content": "AUTOMATED SCANNING USE CASES: (1) Baseline scanning - detect new hosts/services. (2) Compliance verification - ensure only allowed ports open. (3) Change detection - diff against previous scans. (4) Vulnerability monitoring - regular vuln script runs. PIPELINE INTEGRATION: Jenkins/GitLab CI/GitHub Actions can run nmap in containers. Use --open to reduce output, -oX for parsing. DIFF SCANNING: ndiff compares two scans: ndiff baseline.xml current.xml shows changes. ALERTING: Parse output for unexpected ports, pipe to Slack/PagerDuty. EXIT CODES: nmap returns 0 on success. Use $? to detect failures in scripts. CONTAINERIZED: docker run --rm -v $(pwd):/data instrumentisto/nmap -oX /data/scan.xml target. SCHEDULING: Cron for regular scans. Add timestamp to output: -oX scan_$(date +%Y%m%d).xml.",
+          "examples": [
+            {
+              "command": "ndiff baseline.xml current.xml",
+              "explanation": "Compare two scans to detect changes",
+              "use_case": "Change detection in monitored environment"
+            },
+            {
+              "command": "docker run --rm instrumentisto/nmap -sV -p 80,443 target -oX - | tee scan.xml",
+              "explanation": "Containerized nmap scan",
+              "use_case": "CI/CD pipeline scanning"
+            },
+            {
+              "command": "nmap -sS -p 80,443 --open 10.0.0.0/24 -oG - | grep open && echo 'ALERT: unexpected open ports' | mail admin",
+              "explanation": "Scan and alert on findings",
+              "use_case": "Automated security monitoring"
+            },
+            {
+              "command": "0 2 * * 0 /usr/bin/nmap -sV -oX /var/scans/weekly_$(date +\\%Y\\%m\\%d).xml 10.0.0.0/24",
+              "explanation": "Cron entry for weekly scan",
+              "use_case": "Scheduled baseline scanning"
+            },
+            {
+              "command": "nmap -sS -p 22,3389,5900 --open target && echo $?",
+              "explanation": "Check exit code for pipeline logic",
+              "use_case": "Conditional pipeline execution"
+            }
+          ],
+          "warnings": ["Automated scans still need authorization", "CI/CD secrets may expose credentials in logs", "Containerized nmap may need --privileged for raw sockets", "Rate limits and timing should be adjusted for production networks"],
+          "best_practices": ["Store baseline scans for comparison", "Use ndiff for change detection", "Integrate alerts for unexpected findings", "Log all automated scan activities"],
+          "related_cves": [],
+          "related_topics": ["DevSecOps", "Continuous Monitoring", "Change Management"]
+        },
+        {
+          "title": "Custom Reporting and Data Export",
+          "keywords": ["reporting", "export", "CSV", "JSON", "HTML", "PDF"],
+          "difficulty": "advanced",
+          "content": "REPORT FORMATS: XML is source of truth. Transform to other formats as needed. HTML: xsltproc with custom XSLT. nmap-bootstrap-xsl for styled reports. CSV: Custom parsing or tools like nmaptocsv. JSON: Newer nmap supports -oJ. Or convert XML with python/xq. PDF: HTML intermediate then wkhtmltopdf or browser print. CUSTOM XSLT: Create client-specific templates. Include only relevant fields. Add branding. Located in /usr/share/nmap/nmap.xsl by default. TOOLS: nmaptocsv - converts to CSV. nmap-parse-output - multiple format converter. COMBINING DATA: Merge multiple scans with python scripting. Keep source files, create merged views. EXECUTIVE VS TECHNICAL: Executive reports: summary stats, risk counts. Technical: full port/service details.",
+          "examples": [
+            {
+              "command": "xsltproc --output report.html /usr/share/nmap/nmap.xsl scan.xml",
+              "explanation": "Convert XML to HTML with default stylesheet",
+              "use_case": "Quick HTML report"
+            },
+            {
+              "command": "nmaptocsv -i scan.xml -o scan.csv",
+              "explanation": "Convert XML to CSV for Excel import",
+              "use_case": "Spreadsheet-based analysis"
+            },
+            {
+              "command": "nmap -oJ scan.json target",
+              "explanation": "Direct JSON output (newer nmap versions)",
+              "use_case": "API/dashboard integration"
+            },
+            {
+              "command": "cat scan.xml | xq -r '.nmaprun.host[] | [.address[0][\"@addr\"], .ports.port[].\"@portid\"] | @csv'",
+              "explanation": "Extract IP,ports to CSV using xq",
+              "use_case": "Custom field extraction"
+            },
+            {
+              "command": "wkhtmltopdf report.html report.pdf",
+              "explanation": "Convert HTML report to PDF",
+              "use_case": "Creating deliverable PDF report"
+            }
+          ],
+          "warnings": ["Custom XSLT requires XML/XSLT knowledge", "JSON output structure may change between nmap versions", "Large reports may need pagination for PDF", "Tool versions may parse XML differently"],
+          "best_practices": ["Keep XML as authoritative source", "Develop standard templates for consistent reporting", "Include scan methodology in reports", "Version control report templates"],
+          "related_cves": [],
+          "related_topics": ["Documentation", "Client Deliverables", "Data Management"]
+        },
+        {
+          "title": "Diagnosing Slow Scans and Bottlenecks",
+          "keywords": ["slow scan", "bottleneck", "performance", "diagnosis", "optimization"],
+          "difficulty": "advanced",
+          "content": "COMMON BOTTLENECKS: (1) DNS resolution - each host resolved serially by default. Fix: -n to skip DNS, or --dns-servers with fast resolver. (2) Host discovery - waiting for timeouts on dead hosts. Fix: -Pn only for single hosts, otherwise faster discovery methods. (3) Version detection - probes take time. Fix: --version-intensity 2 or lower. (4) Script execution - NSE scripts vary widely. Fix: specific scripts not categories. (5) Retries on filtered ports - waiting for responses that won't come. Fix: --max-retries 1. (6) Parallelism too low - nmap being conservative. Fix: --min-hostgroup 64, --min-parallelism 50. DIAGNOSIS: Use --stats-every 5s to watch progress. Identify which phase is slow. Use -v for verbose progress. Check system resources: CPU, memory, network bandwidth.",
+          "examples": [
+            {
+              "command": "nmap -n -sS --max-retries 1 --min-parallelism 50 -T4 192.168.1.0/24",
+              "explanation": "Optimized fast scan: no DNS, minimal retries, high parallelism",
+              "use_case": "Speed optimization for large subnets"
+            },
+            {
+              "command": "nmap -sV --version-intensity 2 --stats-every 10s target",
+              "explanation": "Light version detection with progress updates",
+              "use_case": "Monitoring slow version scan"
+            },
+            {
+              "command": "nmap -sS --dns-servers 8.8.8.8,1.1.1.1 192.168.1.0/24",
+              "explanation": "Use fast public DNS servers",
+              "use_case": "When local DNS is slow"
+            },
+            {
+              "command": "nmap -v -d --packet-trace -p 80 target 2>&1 | less",
+              "explanation": "Verbose debug trace to see exactly what's happening",
+              "use_case": "Deep performance diagnosis"
+            },
+            {
+              "command": "time nmap -sS -p 80 target vs time nmap -sV -p 80 target",
+              "explanation": "Compare times with and without version detection",
+              "use_case": "Identifying version detection overhead"
+            }
+          ],
+          "warnings": ["Aggressive optimization may cause false negatives", "Network devices may rate-limit fast scans", "CPU/memory exhaustion on scanner can slow scans", "-T5 is rarely appropriate for production networks"],
+          "best_practices": ["Profile slow scans with --stats-every", "Optimize one parameter at a time to measure effect", "Document optimizations that work for specific environments", "Balance speed against accuracy requirements"],
+          "related_cves": [],
+          "related_topics": ["Timing Options", "Parallelism", "Performance Tuning"]
+        },
+        {
+          "title": "Debugging NSE Script Failures",
+          "keywords": ["NSE debug", "script errors", "Lua", "troubleshooting", "script-trace"],
+          "difficulty": "expert",
+          "content": "SCRIPT FAILURE MODES: (1) Script doesn't run - portrule/hostrule not matched. Check with --script-help. (2) Script errors - Lua runtime errors. Use -d2 or higher for details. (3) Script timeout - exceeded --script-timeout. Increase or check network issues. (4) Script returns nil - conditions not met for output. Check with --script-trace. (5) Wrong output - script logic issue or target non-standard. DEBUG TOOLS: --script-trace shows script execution details. -d -d (debug level 2) shows Lua errors. --script-help scriptname shows requirements. nmap --script-updatedb if new script not found. COMMON ISSUES: Missing dependencies (library not installed). Wrong script arguments (check --script-help). Target not responding as expected. Firewall blocking script probes.",
+          "examples": [
+            {
+              "command": "nmap --script-trace --script=http-enum -p 80 target 2>&1 | less",
+              "explanation": "Trace script execution in detail",
+              "use_case": "Understanding why script fails"
+            },
+            {
+              "command": "nmap -d2 --script=smb-vuln-ms17-010 -p 445 target",
+              "explanation": "Debug level 2 for Lua error details",
+              "use_case": "Diagnosing script runtime errors"
+            },
+            {
+              "command": "nmap --script-help http-enum",
+              "explanation": "View script requirements and arguments",
+              "use_case": "Understanding script prerequisites"
+            },
+            {
+              "command": "nmap --script=+http-enum -p 80 target",
+              "explanation": "Force script to run even if portrule fails (+prefix)",
+              "use_case": "Testing script on non-standard ports"
+            },
+            {
+              "command": "nmap --script-updatedb && ls -la /usr/share/nmap/scripts/",
+              "explanation": "Update script database and verify installation",
+              "use_case": "Ensuring scripts are properly installed"
+            }
+          ],
+          "warnings": ["Debug output is verbose - pipe to file/less", "Force-running scripts (+prefix) may produce nonsense on wrong services", "Some script failures are expected (service not vulnerable)", "Custom scripts need explicit path or updatedb"],
+          "best_practices": ["Start with --script-trace for non-obvious failures", "Check --script-help for every script used", "Test scripts on known-good targets first", "Keep notes on script quirks per environment"],
+          "related_cves": [],
+          "related_topics": ["NSE Scripting", "Lua Debugging", "Script Development"]
+        },
+        {
+          "title": "Handling Network Instability and High Latency",
+          "keywords": ["latency", "packet loss", "unstable network", "satellite", "VPN"],
+          "difficulty": "advanced",
+          "content": "HIGH LATENCY SCENARIOS: Satellite links (500ms+ RTT), international VPN, Tor scanning, multi-hop pivots. PACKET LOSS SCENARIOS: Wireless networks, congested links, aggressive rate limiting. TIMING ADJUSTMENTS: --initial-rtt-timeout 1s (up from 1s default). --max-rtt-timeout 10s (up from 10s max). --min-rtt-timeout 500ms (up from 100ms). --max-retries 5 (up from 10 for filtered). --host-timeout 60m for complete unreliable hosts. --scan-delay 500ms to avoid overwhelming slow links. DETECTION: ping -c 100 target | grep 'packet loss' to measure. traceroute to identify slow hops. --reason shows why ports classified as filtered (timeouts). SATELLITE SPECIFIC: 500-700ms RTT is normal. Jitter high. Use -T2 or lower. Expect scans to take 10x longer. REALISTIC EXPECTATIONS: Full port scan over satellite may take hours. Prioritize ports ruthlessly.",
+          "examples": [
+            {
+              "command": "nmap -sS -T2 --initial-rtt-timeout 2s --max-rtt-timeout 15s --max-retries 5 target",
+              "explanation": "Conservative timing for high-latency link",
+              "use_case": "Scanning over satellite or VPN"
+            },
+            {
+              "command": "nmap -sS --scan-delay 1s --max-parallelism 5 target",
+              "explanation": "Slow scan to avoid overwhelming unstable link",
+              "use_case": "Scanning over unreliable connection"
+            },
+            {
+              "command": "ping -c 50 target | tail -1",
+              "explanation": "Measure packet loss and latency before scanning",
+              "use_case": "Baseline network quality"
+            },
+            {
+              "command": "nmap -sS -Pn --top-ports 100 --host-timeout 30m high-latency-target",
+              "explanation": "Limited ports with long host timeout",
+              "use_case": "Practical scan over very slow link"
+            },
+            {
+              "command": "mtr -c 100 -r target",
+              "explanation": "Comprehensive path quality analysis",
+              "use_case": "Identifying problematic network hops"
+            }
+          ],
+          "warnings": ["Default timeouts cause massive false negatives on slow links", "Aggressive retries on lossy network wastes time", "Some networks actively degrade scanner traffic", "Tor scanning requires extreme patience and specialized config"],
+          "best_practices": ["Always test network quality before scanning", "Adjust all timing parameters together", "Reduce port range for slow links", "Document network conditions in report"],
+          "related_cves": [],
+          "related_topics": ["Timing Templates", "Network Diagnostics", "Remote Scanning"]
+        }
+      ]
+    }
+  ]
+}

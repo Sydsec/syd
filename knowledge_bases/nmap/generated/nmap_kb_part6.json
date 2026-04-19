@@ -1,0 +1,447 @@
+{
+  "knowledge_base_part": 6,
+  "categories": [
+    {
+      "id": "protocol_deep_dives",
+      "name": "Protocol-Specific Deep Dives",
+      "topics": [
+        {
+          "title": "IPv6 Scanning Challenges and Techniques",
+          "keywords": ["IPv6", "-6", "ICMPv6", "neighbor discovery", "link-local", "fe80"],
+          "difficulty": "advanced",
+          "content": "IPv6 SCANNING CHALLENGES: (1) Address space is 2^128 - brute force host discovery impossible. A /64 subnet has 18 quintillion addresses. (2) No ARP - uses ICMPv6 Neighbor Discovery instead. (3) Multiple addresses per host (link-local fe80::, global, temporary privacy addresses). (4) Many networks are dual-stack - scan both protocols. DISCOVERY TECHNIQUES: (1) Multicast ping: ping6 ff02::1%eth0 reaches all link-local nodes. (2) DNS enumeration: AAAA records reveal IPv6 addresses. (3) IPv4 mapping: Convert known IPv4 hosts to IPv6 (stateless addressing uses MAC). (4) Traffic sniffing: Passive discovery of active IPv6 hosts. NMAP IPv6: Use -6 flag. Host discovery uses ICMPv6 echo, TCP SYN, UDP. Many firewalls neglect IPv6 rules - potential bypass. COMMON PATTERNS: ::1 (localhost), fe80::/10 (link-local), 2000::/3 (global unicast), ff00::/8 (multicast).",
+          "examples": [
+            {
+              "command": "nmap -6 -sS -Pn -p 22,80,443 2001:db8::1",
+              "explanation": "Basic IPv6 SYN scan",
+              "use_case": "Scanning known IPv6 host"
+            },
+            {
+              "command": "ping6 -c 2 ff02::1%eth0 && ip -6 neigh show",
+              "explanation": "Discover IPv6 neighbors via multicast",
+              "use_case": "Local network IPv6 host discovery"
+            },
+            {
+              "command": "nmap -6 -sn --script=targets-ipv6-multicast-echo 2001:db8::/64",
+              "explanation": "IPv6 host discovery via multicast NSE",
+              "use_case": "Subnet enumeration"
+            },
+            {
+              "command": "nmap -6 --script=ipv6-ra-flood --script-args 'interface=eth0' target",
+              "explanation": "IPv6 Router Advertisement flood test",
+              "use_case": "Testing IPv6 security controls"
+            },
+            {
+              "command": "dig AAAA www.target.com +short | xargs -I {} nmap -6 -sV {}",
+              "explanation": "Discover IPv6 via DNS, then scan",
+              "use_case": "IPv6 recon from DNS"
+            }
+          ],
+          "warnings": ["IPv6 scanning can trigger different firewall rules than IPv4", "Link-local addresses require interface specification (%eth0)", "Privacy extensions generate temporary addresses - host may have multiple"],
+          "best_practices": ["Always scan both IPv4 and IPv6 on dual-stack networks", "Enumerate DNS AAAA records for IPv6 targets", "Check if IPv6 firewall rules match IPv4 policy", "Document all IPv6 addresses found per host"],
+          "related_cves": [],
+          "related_topics": ["Dual-Stack Networks", "ICMPv6", "IPv6 Security"]
+        },
+        {
+          "title": "SCTP Scanning for Telecom Networks",
+          "keywords": ["SCTP", "-sY", "-sZ", "INIT", "COOKIE-ECHO", "telecom", "SS7", "Diameter"],
+          "difficulty": "expert",
+          "content": "SCTP (Stream Control Transmission Protocol): Used in telecom signaling (SS7/SIGTRAN, Diameter, LTE), some databases, and WebRTC. Multi-homing and multi-streaming protocol. SCAN TYPES: -sY (SCTP INIT scan): Sends INIT chunk, open port responds with INIT-ACK, closed with ABORT. Equivalent to TCP SYN scan. -sZ (SCTP COOKIE-ECHO scan): More stealthy, sends COOKIE-ECHO which is dropped by open ports (no state), ABORT from closed. COMMON SCTP PORTS: 2905 (M3UA), 2945 (M2PA), 3868 (Diameter), 9899 (SCTP testing), 36412 (S1AP/LTE). DETECTION: SCTP requires kernel support. Check: cat /proc/net/protocols | grep SCTP. If missing, modprobe sctp. Windows nmap cannot do SCTP scans (no kernel support). IMPORTANT: SCTP is rare outside telecom. Finding it indicates telecom infrastructure, VoLTE, or specialized systems.",
+          "examples": [
+            {
+              "command": "sudo nmap -sY -p 2905,2945,3868,36412 192.168.1.1",
+              "explanation": "SCTP INIT scan on common telecom ports",
+              "use_case": "Telecom infrastructure discovery"
+            },
+            {
+              "command": "sudo nmap -sZ -Pn -p 3868 10.0.0.0/24",
+              "explanation": "Stealthy SCTP COOKIE-ECHO scan for Diameter",
+              "use_case": "Finding Diameter servers in network"
+            },
+            {
+              "command": "sudo nmap -sY -sV -p 1-65535 --open telecom-host",
+              "explanation": "Full SCTP port scan with version detection",
+              "use_case": "Complete SCTP service enumeration"
+            },
+            {
+              "command": "lsmod | grep sctp || sudo modprobe sctp",
+              "explanation": "Ensure SCTP kernel module is loaded",
+              "use_case": "Prerequisite check before SCTP scanning"
+            }
+          ],
+          "warnings": ["SCTP scanning requires root/sudo AND kernel SCTP support", "Windows nmap cannot perform SCTP scans", "SCTP services may have security monitoring", "Telecom networks often have strict access controls"],
+          "best_practices": ["Verify SCTP kernel module loaded before scanning", "Focus on known SCTP ports rather than full range", "SCTP presence indicates high-value telecom target", "Document SCTP findings separately - often missed by others"],
+          "related_cves": [],
+          "related_topics": ["Telecom Security", "SS7", "Diameter Protocol", "LTE Security"]
+        },
+        {
+          "title": "Industrial Control Systems (ICS/SCADA) Scanning",
+          "keywords": ["ICS", "SCADA", "Modbus", "S7", "BACnet", "DNP3", "OT", "industrial"],
+          "difficulty": "expert",
+          "content": "ICS/SCADA PROTOCOLS: Industrial systems use specialized protocols rarely seen in IT networks. MODBUS (502/tcp): Serial protocol over TCP for PLCs. NSE: modbus-discover identifies device info. S7COMM (102/tcp): Siemens S7 PLC protocol. NSE: s7-info extracts hardware/firmware details. BACNET (47808/udp): Building automation. NSE: bacnet-info discovers BACnet devices. DNP3 (20000/tcp): Power grid SCADA. NSE: dnp3-info for device identification. ENIP/CIP (44818/tcp): Rockwell/Allen-Bradley industrial ethernet. NSE: enip-info. CRITICAL WARNING: ICS devices are fragile. Aggressive scanning can crash PLCs, causing physical damage or safety issues. NEVER scan production ICS without explicit authorization and safety measures. Use passive discovery when possible.",
+          "examples": [
+            {
+              "command": "nmap -p 502 --script modbus-discover 192.168.1.0/24",
+              "explanation": "Discover Modbus devices on network",
+              "use_case": "Finding PLCs and industrial controllers"
+            },
+            {
+              "command": "nmap -p 102 --script s7-info 192.168.1.10",
+              "explanation": "Extract Siemens S7 PLC information",
+              "use_case": "Siemens PLC enumeration"
+            },
+            {
+              "command": "nmap -sU -p 47808 --script bacnet-info 192.168.1.0/24",
+              "explanation": "BACnet device discovery (UDP)",
+              "use_case": "Building automation recon"
+            },
+            {
+              "command": "nmap -p 20000 --script dnp3-info 10.0.0.0/24",
+              "explanation": "DNP3 SCADA device enumeration",
+              "use_case": "Power grid infrastructure scanning"
+            },
+            {
+              "command": "nmap -p 44818 --script enip-info 192.168.1.5",
+              "explanation": "EtherNet/IP device information",
+              "use_case": "Rockwell PLC enumeration"
+            }
+          ],
+          "warnings": ["ICS devices can CRASH from scanning - risk of physical damage", "NEVER scan production ICS without explicit written authorization", "Use lowest possible scan intensity (-T1 or -T2)", "Have vendor support on standby during ICS assessments", "Some ICS protocols have no authentication - discovery = access"],
+          "best_practices": ["Get explicit OT/ICS authorization separate from IT authorization", "Scan during maintenance windows only", "Start with passive discovery (Wireshark, network taps)", "Have rollback/recovery plan before any active scanning", "Document all ICS findings with asset owner immediately"],
+          "related_cves": ["CVE-2022-22965", "CVE-2020-15368"],
+          "related_topics": ["OT Security", "PLC Security", "Critical Infrastructure"]
+        },
+        {
+          "title": "VoIP and SIP Protocol Scanning",
+          "keywords": ["VoIP", "SIP", "RTP", "5060", "H.323", "telephony", "PBX"],
+          "difficulty": "advanced",
+          "content": "VOIP PROTOCOLS: SIP (5060/tcp,udp - 5061/tls): Session Initiation Protocol for call setup. NSE: sip-methods enumerates allowed methods (INVITE, REGISTER, OPTIONS). sip-enum-users discovers valid extensions. H.323 (1720/tcp): Legacy VoIP signaling. RTP (16384-32767/udp typically): Actual voice data streams, dynamically assigned. MGCP (2427/udp): Media Gateway Control Protocol. IAX (4569/udp): Asterisk Inter-Asterisk eXchange. ENUMERATION: sip-enum-users tests extension ranges (e.g., 100-999) by sending OPTIONS requests. Valid extensions respond differently. ATTACKS DISCOVERED: Open SIP registration allows toll fraud. Misconfigured PBX permits unauthorized calling. SVP (SIP Vicious) and SIPVicious tools complement nmap. DEFENSE TESTING: Check for SIPS (TLS), digest auth vs basic, ACLs on registration.",
+          "examples": [
+            {
+              "command": "nmap -sU -p 5060 --script sip-methods 192.168.1.0/24",
+              "explanation": "Discover SIP servers and allowed methods",
+              "use_case": "VoIP infrastructure discovery"
+            },
+            {
+              "command": "nmap -sU -p 5060 --script sip-enum-users --script-args sip-enum-users.minext=100,sip-enum-users.maxext=500 192.168.1.10",
+              "explanation": "Enumerate SIP extensions 100-500",
+              "use_case": "Finding valid phone extensions"
+            },
+            {
+              "command": "nmap -p 5060,5061,1720,2427,4569 --script=sip-methods,banner 192.168.1.0/24",
+              "explanation": "Comprehensive VoIP port scan",
+              "use_case": "Full VoIP infrastructure mapping"
+            },
+            {
+              "command": "nmap -sU -p 5060 --script sip-brute --script-args userdb=users.txt 192.168.1.10",
+              "explanation": "SIP credential brute force (DANGEROUS)",
+              "use_case": "Testing SIP authentication - get authorization first"
+            }
+          ],
+          "warnings": ["sip-brute can lock accounts or trigger fraud alerts", "SIP enumeration may be logged by VoIP systems", "RTP ports are dynamic - focus on signaling ports", "Toll fraud is a serious financial risk - report immediately"],
+          "best_practices": ["Start with sip-methods to understand server capabilities", "Use sip-enum-users before any brute forcing", "Check for TLS on 5061 - cleartext SIP is high risk", "Document PBX makes/models from banners"],
+          "related_cves": ["CVE-2021-37706", "CVE-2019-19906"],
+          "related_topics": ["Toll Fraud", "PBX Hacking", "VoIP Security"]
+        },
+        {
+          "title": "Cloud Infrastructure Scanning (AWS, Azure, GCP)",
+          "keywords": ["cloud", "AWS", "Azure", "GCP", "metadata", "169.254.169.254", "IMDS"],
+          "difficulty": "advanced",
+          "content": "CLOUD SCANNING CONSIDERATIONS: (1) AUTHORIZATION: Cloud providers require explicit approval. AWS Pentest Policy, Azure/GCP similar. (2) EPHEMERAL IPS: Instances may change IPs. Scan by internal DNS or service discovery. (3) SECURITY GROUPS: Cloud firewalls filter before instance. Filtered ports may still have listeners. (4) METADATA SERVICE: 169.254.169.254 exposes instance credentials/config. Critical finding if accessible from web app (SSRF). (5) INTERNAL RANGES: Cloud VPCs use 10.x, 172.16-31.x. Scan from inside VPC for accurate results. AWS SPECIFIC: Instance metadata v1 (IMDSv1) vulnerable to SSRF. Check if IMDSv2 enforced. NSE: http-aws-hierarchical-enumeration. AZURE SPECIFIC: 169.254.169.254 with Metadata:true header. NSE scripts limited. GCP SPECIFIC: Metadata at metadata.google.internal. Check for service account tokens.",
+          "examples": [
+            {
+              "command": "nmap -Pn -p 80,443,22,3389 10.0.0.0/16",
+              "explanation": "Scan internal cloud VPC range",
+              "use_case": "Internal cloud infrastructure mapping"
+            },
+            {
+              "command": "curl -s http://169.254.169.254/latest/meta-data/",
+              "explanation": "Check for AWS metadata access (run from target)",
+              "use_case": "SSRF/metadata access verification"
+            },
+            {
+              "command": "nmap -Pn --script http-headers -p 80,443 target | grep -i 'x-amz\\|x-azure\\|x-goog'",
+              "explanation": "Identify cloud provider from HTTP headers",
+              "use_case": "Cloud infrastructure fingerprinting"
+            },
+            {
+              "command": "nmap -sV -p 6379,9200,27017,5432,3306 10.0.0.0/24",
+              "explanation": "Scan for cloud database services",
+              "use_case": "Finding exposed databases in VPC"
+            },
+            {
+              "command": "nmap --script=http-enum -p 80,443 cloud-target",
+              "explanation": "Web enumeration for cloud management interfaces",
+              "use_case": "Finding cloud admin panels"
+            }
+          ],
+          "warnings": ["ALWAYS get cloud provider authorization before scanning", "Cloud IPs may be shared/rotated - verify target ownership", "Aggressive scanning may trigger cloud abuse detection", "Metadata service access is critical severity finding"],
+          "best_practices": ["Scan from within VPC for accurate internal view", "Check provider pentest policies before engagement", "Document cloud region/account for proper scoping", "Test metadata access from any web vulnerabilities found"],
+          "related_cves": ["CVE-2019-5736"],
+          "related_topics": ["SSRF", "Cloud Security", "Instance Metadata", "Container Scanning"]
+        }
+      ]
+    },
+    {
+      "id": "advanced_nse",
+      "name": "Advanced NSE Scripting",
+      "topics": [
+        {
+          "title": "Writing Custom NSE Scripts",
+          "keywords": ["NSE", "Lua", "custom script", "scripting", "automation"],
+          "difficulty": "expert",
+          "content": "NSE SCRIPT STRUCTURE: Written in Lua. Required components: (1) description - what script does, (2) categories - {'safe','intrusive','vuln', etc}, (3) portrule/hostrule - when to run, (4) action - main function. MINIMAL TEMPLATE: description='Custom check'; categories={'safe'}; portrule=function(host,port) return port.number==80 end; action=function(host,port) return 'Port 80 open' end. LIBRARIES: nmap (core), shortport (port matching), stdnse (standard functions), http (web requests), smb (SMB operations), vulns (vulnerability reporting). DEBUGGING: nmap --script-trace shows execution. nmap --script-updatedb after adding scripts. LOCATION: /usr/share/nmap/scripts/ (Linux), custom scripts same directory. EXECUTION: --script=./myscript.nse or copy to scripts dir and run --script=myscript.",
+          "examples": [
+            {
+              "command": "nmap --script=./custom-check.nse -p 80 target",
+              "explanation": "Run custom script from current directory",
+              "use_case": "Testing custom script"
+            },
+            {
+              "command": "nmap --script-trace --script=http-enum target",
+              "explanation": "Debug script execution with trace",
+              "use_case": "Understanding script behavior"
+            },
+            {
+              "command": "nmap --script-updatedb",
+              "explanation": "Update script database after adding new scripts",
+              "use_case": "Registering new custom scripts"
+            },
+            {
+              "command": "nmap --script-help 'http-*' | less",
+              "explanation": "View help for all HTTP scripts",
+              "use_case": "Learning script capabilities"
+            }
+          ],
+          "warnings": ["Custom scripts can crash nmap if poorly written", "Test extensively in lab before production use", "Lua errors may not be obvious - use --script-trace", "Scripts run with nmap's privileges - security implications"],
+          "best_practices": ["Start by modifying existing similar script", "Use shortport library for clean port matching", "Include comprehensive error handling", "Document script with proper description and categories"],
+          "related_cves": [],
+          "related_topics": ["Lua Programming", "Nmap Libraries", "Automation"]
+        },
+        {
+          "title": "NSE Script Arguments and Combinations",
+          "keywords": ["script-args", "script combinations", "NSE tuning", "parallel scripts"],
+          "difficulty": "advanced",
+          "content": "SCRIPT ARGUMENTS: Pass parameters with --script-args. Format: --script-args 'script.arg=value' or --script-args 'arg=value' for global. MULTIPLE ARGS: Comma-separated: --script-args 'http.useragent=Mozilla,smbuser=admin'. ARG FILES: --script-args-file args.txt for complex arguments. COMMON ARGS: creds.global (username:password for all auth scripts), userdb/passdb (wordlist files), http.useragent (custom UA), smbdomain/smbuser/smbpassword (SMB auth). SCRIPT COMBINATIONS: Scripts in same category run in parallel. --script='smb-* and not smb-brute' runs all SMB except brute. Boolean: and, or, not. Categories: --script='safe and discovery'. PERFORMANCE: --script-timeout limits per-script time. --max-parallelism affects script concurrency indirectly.",
+          "examples": [
+            {
+              "command": "nmap --script=http-enum --script-args http.useragent='Googlebot/2.1' target",
+              "explanation": "HTTP enum with custom User-Agent",
+              "use_case": "Evading WAF User-Agent blocks"
+            },
+            {
+              "command": "nmap --script=smb-enum-shares --script-args smbusername=admin,smbpassword=pass123 target",
+              "explanation": "Authenticated SMB share enumeration",
+              "use_case": "SMB enumeration with credentials"
+            },
+            {
+              "command": "nmap --script='smb-* and not smb-brute' -p 445 target",
+              "explanation": "All SMB scripts except brute force",
+              "use_case": "Safe SMB enumeration"
+            },
+            {
+              "command": "nmap --script=http-brute --script-args 'userdb=users.txt,passdb=pass.txt,http-brute.path=/admin' target",
+              "explanation": "HTTP brute with custom wordlists and path",
+              "use_case": "Web login brute force"
+            },
+            {
+              "command": "nmap --script='default and safe' -p 1-1000 target",
+              "explanation": "Default scripts that are also safe category",
+              "use_case": "Conservative script scan"
+            }
+          ],
+          "warnings": ["Credential args may be visible in process list", "Use --script-args-file for sensitive credentials", "Complex boolean expressions may not work as expected - test", "Some scripts ignore global args - check docs"],
+          "best_practices": ["Use --script-args-file for credentials and complex args", "Test script combinations on single host first", "Document which args produced results for report", "Check --script-help for each script's specific args"],
+          "related_cves": [],
+          "related_topics": ["NSE Categories", "Script Customization", "Automation"]
+        },
+        {
+          "title": "NSE Script Performance Optimization",
+          "keywords": ["script performance", "timeout", "parallelism", "slow scripts"],
+          "difficulty": "advanced",
+          "content": "SCRIPT PERFORMANCE ISSUES: NSE scripts can drastically slow scans. http-enum alone can take 30+ seconds per host. TIMEOUTS: --script-timeout 30s limits individual script execution. --host-timeout 10m limits total time per host. PARALLEL SCRIPTS: Scripts in same category MAY run in parallel. Scripts requiring same port run sequentially. REDUCE SCOPE: Use specific scripts, not categories. --script=http-title faster than --script=http-*. NETWORK-INTENSIVE SCRIPTS: http-enum, http-brute, *-brute scripts send many requests. Add delays: --scan-delay 100ms. VERSION DETECTION: -sV runs version scripts. --version-intensity 0-9 controls depth. Lower = faster. MEASURING: --stats-every 10s shows progress. Time with 'time nmap ...' to benchmark. PARALLELISM TUNE: --min-parallelism and --max-parallelism affect port scanning, indirectly affect scripts.",
+          "examples": [
+            {
+              "command": "nmap --script=http-title -p 80,443 --script-timeout 10s 192.168.1.0/24",
+              "explanation": "Fast HTTP title grab with timeout",
+              "use_case": "Quick web server identification"
+            },
+            {
+              "command": "nmap -sV --version-intensity 2 -p 22,80,443 target",
+              "explanation": "Light version detection for speed",
+              "use_case": "Fast service identification"
+            },
+            {
+              "command": "time nmap --script=http-enum -p 80 target",
+              "explanation": "Benchmark script execution time",
+              "use_case": "Identifying slow scripts"
+            },
+            {
+              "command": "nmap --script=smb-os-discovery --stats-every 5s 192.168.1.0/24",
+              "explanation": "Script scan with progress updates",
+              "use_case": "Monitoring long script scans"
+            },
+            {
+              "command": "nmap --script=default --script-timeout 15s --host-timeout 5m target",
+              "explanation": "Default scripts with aggressive timeouts",
+              "use_case": "Time-boxed comprehensive scan"
+            }
+          ],
+          "warnings": ["Aggressive timeouts may miss slow services", "Some scripts need longer timeouts for accurate results", "--version-intensity 0 may miss version info entirely", "Script parallelism not directly controllable"],
+          "best_practices": ["Set --script-timeout appropriate to target network latency", "Use specific scripts rather than wildcards for speed", "Benchmark script performance before large scans", "Consider separating discovery scan from script scan"],
+          "related_cves": [],
+          "related_topics": ["Scan Optimization", "Timing Templates", "Large Scale Scanning"]
+        }
+      ]
+    },
+    {
+      "id": "edge_cases",
+      "name": "Edge Cases & Expert Troubleshooting",
+      "topics": [
+        {
+          "title": "When -Pn Makes Things Worse",
+          "keywords": ["-Pn", "no ping", "filtered", "false negatives", "discovery"],
+          "difficulty": "advanced",
+          "content": "COMMON MISCONCEPTION: 'Host not responding? Use -Pn!' REALITY: -Pn skips host discovery, assuming ALL hosts are up. PROBLEMS: (1) Scanning dead IPs wastes time (default timeout per IP even if dead), (2) Against /24, scanning 254 'hosts' when only 10 are up. (3) Firewall that blocks discovery may also block port scans - you get 'filtered' not 'open'. (4) No host discovery data means missing MAC addresses, reverse DNS. WHEN -Pn HELPS: Single known-live host behind firewall that blocks ICMP/TCP ping. WHEN -Pn HURTS: Subnet scans (massive slowdown), networks with few live hosts, when you need MAC/hostname data. BETTER ALTERNATIVES: (1) Try different discovery: -PS22,80,443 (TCP SYN to common ports), -PA80 (TCP ACK), -PU (UDP). (2) ARP scan if on same subnet: -PR. (3) Reduce timeout: --host-timeout 30s to skip unresponsive hosts faster.",
+          "examples": [
+            {
+              "command": "nmap -PS22,80,443 192.168.1.0/24",
+              "explanation": "TCP SYN discovery on common ports instead of ICMP",
+              "use_case": "Discovery when ICMP is blocked"
+            },
+            {
+              "command": "nmap -PA80,443 -PS22,3389 192.168.1.0/24",
+              "explanation": "Combine TCP ACK and SYN discovery",
+              "use_case": "Robust discovery against stateful firewalls"
+            },
+            {
+              "command": "nmap -PR 192.168.1.0/24",
+              "explanation": "ARP-only discovery for local subnet",
+              "use_case": "Same-subnet discovery (fastest, always works)"
+            },
+            {
+              "command": "nmap -Pn --host-timeout 30s -p 22 192.168.1.0/24",
+              "explanation": "No ping but with timeout to skip dead hosts",
+              "use_case": "When -Pn is necessary, minimize waste"
+            },
+            {
+              "command": "nmap -sn -PS22,80 --reason 192.168.1.0/24",
+              "explanation": "Discovery only with TCP, show reason for up/down",
+              "use_case": "Troubleshooting discovery issues"
+            }
+          ],
+          "warnings": ["-Pn against subnets is extremely slow", "-Pn doesn't make blocked ports visible", "Missing discovery phase means missing MAC addresses", "Use -Pn only for single known-live hosts"],
+          "best_practices": ["Try TCP/UDP discovery before resorting to -Pn", "Use --reason to understand why hosts appear down", "For subnets, never use -Pn as first resort", "Combine -Pn with --host-timeout for efficiency"],
+          "related_cves": [],
+          "related_topics": ["Host Discovery", "Firewall Bypass", "Scan Optimization"]
+        },
+        {
+          "title": "Scanning Through Load Balancers and NAT",
+          "keywords": ["load balancer", "NAT", "round robin", "inconsistent results", "multiple backends"],
+          "difficulty": "expert",
+          "content": "LOAD BALANCER CHALLENGES: (1) Different backend servers have different services. Scan shows union of all backends. (2) Stateless scanning hits different backends per probe - inconsistent results. (3) Health checks may open ports that backends don't serve. (4) Source IP persistence means retries hit same backend - incomplete picture. NAT CHALLENGES: (1) Port forwarding maps external port to different internal port - version detection may be wrong service. (2) Many internal hosts behind one IP - can't enumerate all. (3) Connection tracking affects scan behavior - RST from NAT vs host. DETECTION: Inconsistent banners on same port = load balancer. TTL variations = multiple backends. TECHNIQUES: Run scan multiple times and diff results. Use --max-retries 0 to minimize backend affinity. Add -sV with high intensity to get more banners per backend.",
+          "examples": [
+            {
+              "command": "for i in {1..5}; do nmap -sV -p 80 --max-retries 0 target -oG scan_$i.gnmap; done && diff scan_*.gnmap",
+              "explanation": "Multiple scans to detect load balancer backends",
+              "use_case": "Identifying multiple backends behind LB"
+            },
+            {
+              "command": "nmap -sV -p 80 --version-intensity 9 --max-retries 3 target",
+              "explanation": "High-intensity version scan for more backend sampling",
+              "use_case": "Gathering banners from multiple backends"
+            },
+            {
+              "command": "nmap --script=http-headers -p 80 target | grep -i 'server\\|x-backend\\|x-served'",
+              "explanation": "Check HTTP headers for backend identification",
+              "use_case": "Fingerprinting load balancer/backends"
+            },
+            {
+              "command": "hping3 -S -p 80 -c 20 target | grep ttl",
+              "explanation": "Check TTL variations indicating multiple backends",
+              "use_case": "Passive load balancer detection"
+            }
+          ],
+          "warnings": ["Single scan may miss services on some backends", "Load balancer health check ports may not reflect backend reality", "NAT port mapping may confuse service identification", "Results may not be reproducible due to backend rotation"],
+          "best_practices": ["Run scans multiple times against suspected LB", "Compare banners across repeated scans", "Document load balancer findings for accurate reporting", "Use --version-intensity 9 for thorough backend sampling"],
+          "related_cves": [],
+          "related_topics": ["Service Enumeration", "Infrastructure Mapping", "Banner Grabbing"]
+        },
+        {
+          "title": "False Positives and False Negatives Deep Dive",
+          "keywords": ["false positive", "false negative", "verification", "accuracy", "filtered"],
+          "difficulty": "advanced",
+          "content": "FALSE POSITIVES (port shows open but isn't): (1) Stateful firewall RST - firewall sends RST on behalf of closed host, shows as 'closed' (not false positive for closed). (2) Load balancer accepts on port not served - health check port. (3) IDS honeypot responds to all ports. (4) Host replies but service crashed after reply. VERIFICATION: -sV for banner, manual nc/curl test. FALSE NEGATIVES (port is open but shows closed/filtered): (1) Timing too aggressive - packet lost, no retry. Fix: -T3 or lower. (2) Rate limiting - initial responses, then dropped. Fix: --max-rate 100. (3) Stateful firewall - SYN scan works, ACK doesn't. (4) Port filtering based on source IP. (5) Transient service (started after scan passed port). VERIFICATION: Manual test with nc. Scan again with slower timing. Try from different source IP. -sS and -sT may give different results due to OS TCP stack differences. FILTERED REALITY: 'filtered' means no response AND no RST. Could be: firewall drop, packet loss, rate limit, or unreachable host.",
+          "examples": [
+            {
+              "command": "nmap -sS -sV -p 80 --reason target",
+              "explanation": "Verify open port with version detection and reason",
+              "use_case": "Confirming port is truly open with service"
+            },
+            {
+              "command": "nc -zv target 80 && curl -I target:80",
+              "explanation": "Manual verification of open port",
+              "use_case": "Confirming false positive/negative"
+            },
+            {
+              "command": "nmap -sS -T2 --max-retries 5 -p 22 target",
+              "explanation": "Slow scan with retries to reduce false negatives",
+              "use_case": "Thorough scan of suspicious filtered port"
+            },
+            {
+              "command": "nmap -sS -p 80 --source-port 53 target",
+              "explanation": "Scan from trusted source port to bypass filters",
+              "use_case": "Testing for source-port based filtering"
+            },
+            {
+              "command": "nmap -sS -Pn -T4 -p 1-1000 target && nmap -sT -Pn -T3 -p 1-1000 target && diff",
+              "explanation": "Compare SYN vs connect scan for discrepancies",
+              "use_case": "Finding ports open to one scan type only"
+            }
+          ],
+          "warnings": ["'closed' is definitive (RST received), 'filtered' is uncertain", "Fast timing causes most false negatives", "Stateful firewalls affect different scan types differently", "Single scan is not authoritative - verify"],
+          "best_practices": ["Always verify critical findings manually", "Use --reason to understand port state determination", "Compare multiple scan types (SYN, Connect, UDP)", "Document verification methodology in reports"],
+          "related_cves": [],
+          "related_topics": ["Scan Types", "Firewall Behavior", "Verification Methods"]
+        },
+        {
+          "title": "Asymmetric Routing and MTU Discovery Problems",
+          "keywords": ["asymmetric routing", "MTU", "PMTUD", "fragmentation", "path issues"],
+          "difficulty": "expert",
+          "content": "ASYMMETRIC ROUTING: Packets take different paths to and from target. PROBLEMS: (1) Your scan reaches target via path A, response returns via path B. Firewall on path B blocks response - appears filtered. (2) TTL-based techniques (OS fingerprinting) give inconsistent results. (3) Some paths may have different latency - timing calculations wrong. DETECTION: traceroute shows forward path. Check if response TTL differs from expected. Use --reason to see exact response. MTU DISCOVERY ISSUES: PMTUD (Path MTU Discovery) relies on ICMP 'fragmentation needed' messages. If blocked, large packets silently dropped. SYMPTOMS: Small packets work, large fail. -sV fails (large probes) but -sS works (small SYN). FIXES: --mtu 1400 to force smaller packets. --send-eth bypasses OS MTU handling. Check path MTU: ping -s 1472 -M do target (Linux).",
+          "examples": [
+            {
+              "command": "traceroute target && traceroute -n target",
+              "explanation": "Check forward path for routing issues",
+              "use_case": "Diagnosing asymmetric routing"
+            },
+            {
+              "command": "ping -s 1472 -M do target",
+              "explanation": "Test MTU with largest non-fragmented packet",
+              "use_case": "PMTUD problem detection (Linux)"
+            },
+            {
+              "command": "nmap -sS --mtu 1400 -Pn target",
+              "explanation": "Scan with reduced MTU to avoid fragmentation",
+              "use_case": "Working around MTU issues"
+            },
+            {
+              "command": "nmap -sS --reason -Pn -p 80 target",
+              "explanation": "Show exact reason for port state",
+              "use_case": "Debugging unexpected filtered ports"
+            },
+            {
+              "command": "tcpdump -i eth0 host target and icmp",
+              "explanation": "Capture ICMP errors indicating MTU problems",
+              "use_case": "Diagnosing fragmentation issues"
+            }
+          ],
+          "warnings": ["Asymmetric routing issues are difficult to diagnose remotely", "MTU problems may only affect certain probe types", "Some ISPs/networks block ICMP, breaking PMTUD", "VPN tunnels often have lower MTU - account for overhead"],
+          "best_practices": ["Check traceroute before blaming scan issues on target", "Test with different packet sizes if large probes fail", "Use --mtu when scanning over VPN or tunnels", "Document routing/MTU findings as they affect remediation"],
+          "related_cves": [],
+          "related_topics": ["Network Troubleshooting", "Path Analysis", "VPN Scanning"]
+        }
+      ]
+    }
+  ]
+}

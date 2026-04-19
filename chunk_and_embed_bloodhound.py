@@ -2,7 +2,17 @@
 """
 Chunk and Embed BloodHound Knowledge Base
 Converts BloodHound knowledge JSON into FAISS index with metadata
+
+NOTE: Uses the PERMANENT fix for PyTorch 2.6.0 meta tensor issue.
+DO NOT call torch.set_default_device() before loading models!
 """
+
+import os
+# Environment variables must be set BEFORE torch imports
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["ACCELERATE_USE_CPU"] = "1"
+os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import json
 import numpy as np
@@ -193,9 +203,13 @@ def create_embeddings(chunks):
     """Generate embeddings for all chunks"""
     print("[3/5] Generating embeddings (this may take a few minutes)...")
 
-    # Load embedding model
+    # Load embedding model with PERMANENT fix for PyTorch 2.6.0
     print(f"  Loading model: {EMBEDDING_MODEL}")
-    model = SentenceTransformer(EMBEDDING_MODEL)
+    model = SentenceTransformer(
+        EMBEDDING_MODEL,
+        device='cpu',
+        model_kwargs={'low_cpu_mem_usage': False}
+    )
 
     # Extract text content
     texts = [chunk['content'] for chunk in chunks]
@@ -211,15 +225,19 @@ def create_embeddings(chunks):
     return embeddings
 
 def build_faiss_index(embeddings):
-    """Create FAISS index from embeddings"""
+    """Create FAISS index from embeddings (cosine similarity via normalized inner product)"""
     print("[4/5] Building FAISS index...")
 
-    # Create FAISS index
-    dimension = embeddings.shape[1]
-    index = faiss.IndexFlatL2(dimension)
+    # Normalize embeddings for cosine similarity (must match query-time normalization in syd.py)
+    embeddings = np.array(embeddings).astype('float32')
+    faiss.normalize_L2(embeddings)
 
-    # Add embeddings
-    index.add(np.array(embeddings).astype('float32'))
+    # Use IndexFlatIP (inner product) after normalization = cosine similarity
+    dimension = embeddings.shape[1]
+    index = faiss.IndexFlatIP(dimension)
+
+    # Add normalized embeddings
+    index.add(embeddings)
 
     print(f"OK FAISS index created: {index.ntotal} vectors, {dimension} dimensions")
     return index
@@ -269,8 +287,12 @@ def test_retrieval(index):
         print(f"Error: Chunks PKL file not found at {OUTPUT_PKL_CHUNKS}. Cannot run retrieval test.")
         return
 
-    # Load embedding model
-    model = SentenceTransformer(EMBEDDING_MODEL)
+    # Load embedding model with PERMANENT fix
+    model = SentenceTransformer(
+        EMBEDDING_MODEL,
+        device='cpu',
+        model_kwargs={'low_cpu_mem_usage': False}
+    )
 
     # Test queries
     test_queries = [

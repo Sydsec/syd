@@ -1,8 +1,18 @@
 #!/usr/bin/env python3
 """
 Chunk and Embed Volatility Knowledge Base
-Converts Opus-generated JSON into FAISS index with metadata
+Converts markdown knowledge base into FAISS index for RAG
+
+FIXED: PyTorch 2.6.0 meta tensor issue
+Mirrors nmap chunking architecture
 """
+
+import os
+# Environment variables must be set BEFORE torch imports
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["ACCELERATE_USE_CPU"] = "1"
+os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import json
 import numpy as np
@@ -11,269 +21,234 @@ from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from datetime import datetime
 import pickle
+import re
 
 # Configuration
-KNOWLEDGE_FILE = Path("knowledge_bases/volatility/generated/volatility_complete_knowledge.json")
+KNOWLEDGE_DIR = Path("knowledge_bases/volatility")
 OUTPUT_FAISS = Path("rag_engine/embeddings/customers/customer_syd_volatility_knowledge_Volatility3.faiss")
-OUTPUT_METADATA = Path("rag_engine/embeddings/customers/customer_syd_volatility_knowledge_Volatility3_metadata.json")
-OUTPUT_PKL_CHUNKS = Path("rag_engine/embeddings/customers/customer_syd_volatility_knowledge_Volatility3.pkl")
+OUTPUT_PKL = Path("rag_engine/embeddings/customers/customer_syd_volatility_knowledge_Volatility3.pkl")
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
-def load_knowledge():
-    """Load Opus-generated knowledge"""
-    print(f"[1/5] Loading knowledge from: {KNOWLEDGE_FILE}")
+def load_markdown_files():
+    """Load all markdown files from knowledge base directory"""
+    print(f"[1/5] Loading Volatility knowledge from: {KNOWLEDGE_DIR}")
 
-    if not KNOWLEDGE_FILE.exists():
-        print(f"ERROR: Knowledge file not found: {KNOWLEDGE_FILE}")
-        print("Please generate knowledge with Opus first!")
-        return None
+    markdown_files = sorted(KNOWLEDGE_DIR.glob("*.md"))
 
-    with open(KNOWLEDGE_FILE, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+    if not markdown_files:
+        print(f"ERROR: No markdown files found in {KNOWLEDGE_DIR}")
+        print("Please create knowledge base files first!")
+        return []
 
-    print(f"✓ Loaded knowledge base")
-    return data
+    documents = []
+    for md_file in markdown_files:
+        with open(md_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+            documents.append({
+                'filename': md_file.name,
+                'content': content
+            })
 
-def chunk_knowledge(knowledge):
-    """Convert knowledge into chunks with metadata"""
-    print("[2/5] Chunking knowledge into embeddable pieces...")
+    print(f"[OK] Loaded {len(documents)} knowledge base files")
+    return documents
+
+def extract_sections(markdown_content):
+    """Extract major sections from markdown (## headers)"""
+    sections = []
+    current_section = {'title': 'Introduction', 'content': ''}
+
+    lines = markdown_content.split('\n')
+    for line in lines:
+        # Match ## headers (level 2)
+        if line.startswith('## '):
+            # Save previous section if it has content
+            if current_section['content'].strip():
+                sections.append(current_section)
+            # Start new section
+            current_section = {
+                'title': line[3:].strip(),
+                'content': ''
+            }
+        else:
+            current_section['content'] += line + '\n'
+
+    # Add last section
+    if current_section['content'].strip():
+        sections.append(current_section)
+
+    return sections
+
+def chunk_by_paragraphs(text, max_chunk_size=1000):
+    """Split text into paragraph-sized chunks"""
+    # Split by double newlines (paragraphs)
+    paragraphs = text.split('\n\n')
 
     chunks = []
+    current_chunk = ''
 
-    categories = knowledge.get('knowledge_base', {}).get('categories', [])
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
 
-    for category in categories:
-        category_id = category.get('id')
-        category_name = category.get('name')
+        # If adding this paragraph exceeds max size, start new chunk
+        if len(current_chunk) + len(para) > max_chunk_size and current_chunk:
+            chunks.append(current_chunk.strip())
+            current_chunk = para
+        else:
+            if current_chunk:
+                current_chunk += '\n\n' + para
+            else:
+                current_chunk = para
 
-        for topic in category.get('topics', []):
-            topic_title = topic.get('title')
-            keywords = topic.get('keywords', [])
-            difficulty = topic.get('difficulty', 'intermediate')
+    # Add last chunk
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
 
-            # Main content chunk
-            main_chunk = {
-                'id': f"{category_id}_{len(chunks)}",
-                'content': topic.get('content', ''),
-                'metadata': {
-                    'category': category_id,
-                    'category_name': category_name,
-                    'topic': topic_title,
-                    'keywords': keywords,
-                    'difficulty': difficulty,
-                    'chunk_type': 'explanation'
-                }
-            }
-            chunks.append(main_chunk)
-
-            # Example chunks
-            for idx, example in enumerate(topic.get('examples', [])):
-                example_text = f"""Command: {example.get('command', '')}
-
-Explanation: {example.get('explanation', '')}
-
-Use Case: {example.get('use_case', '')}
-
-Output Sample:
-{example.get('output_sample', '')}
-"""
-
-                example_chunk = {
-                    'id': f"{category_id}_{len(chunks)}_ex{idx}",
-                    'content': example_text,
-                    'metadata': {
-                        'category': category_id,
-                        'category_name': category_name,
-                        'topic': topic_title,
-                        'keywords': keywords + ['example', 'command'],
-                        'difficulty': difficulty,
-                        'chunk_type': 'example',
-                        'command': example.get('command', '')
-                    }
-                }
-                chunks.append(example_chunk)
-
-            # Best practices chunk
-            if topic.get('best_practices'):
-                bp_text = "Best Practices:\n" + "\n".join([f"• {bp}" for bp in topic.get('best_practices', [])])
-
-                bp_chunk = {
-                    'id': f"{category_id}_{len(chunks)}_bp",
-                    'content': bp_text,
-                    'metadata': {
-                        'category': category_id,
-                        'category_name': category_name,
-                        'topic': topic_title,
-                        'keywords': keywords + ['best practices'],
-                        'difficulty': difficulty,
-                        'chunk_type': 'best_practice'
-                    }
-                }
-                chunks.append(bp_chunk)
-
-            # Warnings chunk
-            if topic.get('warnings'):
-                warn_text = "Warnings:\n" + "\n".join([f"⚠ {w}" for w in topic.get('warnings', [])])
-
-                warn_chunk = {
-                    'id': f"{category_id}_{len(chunks)}_warn",
-                    'content': warn_text,
-                    'metadata': {
-                        'category': category_id,
-                        'category_name': category_name,
-                        'topic': topic_title,
-                        'keywords': keywords + ['warning', 'safety'],
-                        'difficulty': difficulty,
-                        'chunk_type': 'warning'
-                    }
-                }
-                chunks.append(warn_chunk)
-
-    print(f"✓ Created {len(chunks)} chunks from {len(categories)} categories")
     return chunks
 
-def create_embeddings(chunks):
-    """Generate embeddings for all chunks"""
-    print("[3/5] Generating embeddings (this may take a few minutes)...")
+def chunk_knowledge(documents):
+    """Convert knowledge documents into chunks with metadata"""
+    print("[2/5] Chunking knowledge into embeddable pieces...")
 
-    # Load embedding model
+    all_chunks = []
+
+    for doc in documents:
+        filename = doc['filename']
+        content = doc['content']
+
+        # Extract main title (first # header)
+        title_match = re.search(r'^# (.+)$', content, re.MULTILINE)
+        doc_title = title_match.group(1) if title_match else filename.replace('.md', '')
+
+        # Extract sections (## headers)
+        sections = extract_sections(content)
+
+        for section in sections:
+            section_title = section['title']
+            section_content = section['content']
+
+            # Chunk large sections into paragraphs
+            para_chunks = chunk_by_paragraphs(section_content, max_chunk_size=800)
+
+            for idx, chunk_text in enumerate(para_chunks):
+                if len(chunk_text.strip()) < 50:  # Skip very small chunks
+                    continue
+
+                chunk = {
+                    'id': f"{filename}_{len(all_chunks)}",
+                    'content': chunk_text,
+                    'metadata': {
+                        'filename': filename,
+                        'document_title': doc_title,
+                        'section': section_title,
+                        'chunk_index': idx,
+                        'source': 'volatility_knowledge_base'
+                    }
+                }
+                all_chunks.append(chunk)
+
+    print(f"[OK] Created {len(all_chunks)} chunks")
+    return all_chunks
+
+def embed_chunks(chunks):
+    """Generate embeddings for all chunks"""
+    print(f"[3/5] Generating embeddings using {EMBEDDING_MODEL}...")
+    print("Loading embedding model (this may take a minute)...")
+
+    # Load embedding model (CPU-only mode enforced by environment variables)
     model = SentenceTransformer(EMBEDDING_MODEL)
 
-    # Extract text content
+    # Extract content for embedding
     texts = [chunk['content'] for chunk in chunks]
 
-    # Generate embeddings
-    embeddings = model.encode(
-        texts,
-        show_progress_bar=True,
-        batch_size=32
-    )
+    print(f"Embedding {len(texts)} chunks...")
+    embeddings = model.encode(texts, show_progress_bar=True, convert_to_numpy=True)
 
-    print(f"✓ Generated embeddings: {embeddings.shape}")
+    print(f"[OK] Generated embeddings: {embeddings.shape}")
     return embeddings
 
 def build_faiss_index(embeddings):
-    """Create FAISS index from embeddings"""
+    """Build FAISS index for similarity search"""
     print("[4/5] Building FAISS index...")
 
-    # Create FAISS index
+    # Normalize embeddings for cosine similarity (must match query-time normalization in syd.py)
+    faiss.normalize_L2(embeddings)
+
+    # Use IndexFlatIP (inner product) after normalization = cosine similarity
+    # This is consistent with Nmap and YARA embedding modules
     dimension = embeddings.shape[1]
-    index = faiss.IndexFlatL2(dimension)
+    index = faiss.IndexFlatIP(dimension)
+    index.add(embeddings)
 
-    # Add embeddings
-    index.add(np.array(embeddings).astype('float32'))
-
-    print(f"✓ FAISS index created: {index.ntotal} vectors, {dimension} dimensions")
+    print(f"[OK] Built FAISS index with {index.ntotal} vectors")
     return index
 
-def save_index_and_metadata(index, chunks):
-    """Save FAISS index and metadata"""
-    print("[5/5] Saving index and metadata...")
+def save_artifacts(index, chunks):
+    """Save FAISS index and chunk metadata"""
+    print("[5/5] Saving artifacts...")
 
-    # Ensure directories exist
+    # Ensure output directory exists
     OUTPUT_FAISS.parent.mkdir(parents=True, exist_ok=True)
 
     # Save FAISS index
     faiss.write_index(index, str(OUTPUT_FAISS))
-    print(f"✓ FAISS index saved: {OUTPUT_FAISS}")
+    print(f"[OK] Saved FAISS index: {OUTPUT_FAISS}")
 
-    # Save chunks as a pickle file for ToolRAG
-    with open(OUTPUT_PKL_CHUNKS, 'wb') as f:
+    # Save chunks with metadata (pickle for fast loading)
+    with open(OUTPUT_PKL, 'wb') as f:
         pickle.dump(chunks, f)
-    print(f"✓ Chunks saved: {OUTPUT_PKL_CHUNKS}")
+    print(f"[OK] Saved chunk metadata: {OUTPUT_PKL}")
 
-    # Save metadata
-    metadata = {
-        'created_date': datetime.now().isoformat(),
-        'total_chunks': len(chunks),
-        'embedding_model': EMBEDDING_MODEL,
-        'chunks': chunks
-    }
-
-    with open(OUTPUT_METADATA, 'w', encoding='utf-8') as f:
-        json.dump(metadata, f, indent=2, ensure_ascii=False)
-
-    print(f"✓ Metadata saved: {OUTPUT_METADATA}")
-
-def test_retrieval(index):
-    """Test the index with a sample query"""
-    print("\n" + "=" * 60)
-    print("TESTING RETRIEVAL")
-    print("=" * 60)
-
-    # Load chunks from the PKL file
-    try:
-        with open(OUTPUT_PKL_CHUNKS, 'rb') as f:
-            chunks = pickle.load(f)
-        print(f"✓ Loaded {len(chunks)} chunks from {OUTPUT_PKL_CHUNKS}")
-    except FileNotFoundError:
-        print(f"Error: Chunks PKL file not found at {OUTPUT_PKL_CHUNKS}. Cannot run retrieval test.")
-        return
-
-    # Load embedding model
-    model = SentenceTransformer(EMBEDDING_MODEL)
-
-    # Test query
-    test_query = "How do I find processes with code injection?"
-    print(f"\nTest Query: \"{test_query}\"\n")
-
-    # Encode query
-    query_embedding = model.encode([test_query])
-
-    # Search
-    k = 5  # Top 5 results
-    distances, indices = index.search(
-        np.array(query_embedding).astype('float32'),
-        k
-    )
-
-    print(f"Top {k} Results:")
-    print("-" * 60)
-
-    for i, idx in enumerate(indices[0]):
-        chunk = chunks[idx]
-        print(f"\n{i+1}. [{chunk['metadata']['category_name']}] {chunk['metadata']['topic']}")
-        print(f"   Type: {chunk['metadata']['chunk_type']}")
-        print(f"   Preview: {chunk['content'][:150]}...")
-        print(f"   Distance: {distances[0][i]:.4f}")
-
-    print("\n" + "=" * 60)
+    # Also save as JSON for human readability
+    json_path = OUTPUT_PKL.with_suffix('.json')
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(chunks, f, indent=2, ensure_ascii=False)
+    print(f"[OK] Saved readable metadata: {json_path}")
 
 def main():
     print("=" * 60)
-    print("VOLATILITY KNOWLEDGE BASE → FAISS INDEX")
+    print("Volatility Knowledge Base Embedder")
     print("=" * 60)
     print()
 
-    # Load knowledge
-    knowledge = load_knowledge()
-    if not knowledge:
-        return
+    # Step 1: Load markdown files
+    documents = load_markdown_files()
+    if not documents:
+        return 1
 
-    # Chunk
-    chunks = chunk_knowledge(knowledge)
+    # Step 2: Chunk into smaller pieces
+    chunks = chunk_knowledge(documents)
+    if not chunks:
+        print("ERROR: No chunks created!")
+        return 1
 
-    # Embed
-    embeddings = create_embeddings(chunks)
+    # Step 3: Generate embeddings
+    embeddings = embed_chunks(chunks)
 
-    # Build index
+    # Step 4: Build FAISS index
     index = build_faiss_index(embeddings)
 
-    # Save
-    save_index_and_metadata(index, chunks)
+    # Step 5: Save everything
+    save_artifacts(index, chunks)
 
-    # Test
-    test_retrieval(index)
-
-    print("\n" + "=" * 60)
-    print("✓ DONE! FAISS index ready to use!")
+    print()
+    print("=" * 60)
+    print("[SUCCESS] SUCCESS - Volatility knowledge base is ready!")
     print("=" * 60)
     print()
+    print("Files created:")
+    print(f"  - FAISS index: {OUTPUT_FAISS}")
+    print(f"  - Chunk metadata: {OUTPUT_PKL}")
+    print()
     print("Next steps:")
-    print("1. Run: python syd.py")
-    print("2. Go to Blue Team → Volatility3")
-    print("3. Ask questions in the Ask Syd panel!")
+    print("  1. Restart Syd to load new knowledge base")
+    print("  2. Test with: 'What is Volatility?' in Ask Syd")
+    print("  3. Load a Volatility dump and ask analysis questions")
     print()
 
+    return 0
+
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.exit(main())

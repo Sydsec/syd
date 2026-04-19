@@ -93,11 +93,18 @@ class NmapFactExtractor:
         """Extract all target IPs/hostnames"""
         targets = []
 
-        # Match "Nmap scan report for <target>"
-        for match in re.finditer(r'Nmap scan report for ([^\s\n]+)', scan_text):
+        # Match "Nmap scan report for <target>" with optional "(IP)" or "(hostname)"
+        # Handles both formats:
+        #   "Nmap scan report for 10.0.5.10 (DC01.CORP.LOCAL)"  -> extracts 10.0.5.10
+        #   "Nmap scan report for DC-INTERNAL-01.OMNI.LOCAL (10.50.1.10)" -> extracts DC-INTERNAL-01.OMNI.LOCAL AND 10.50.1.10
+        for match in re.finditer(r'Nmap scan report for ([^\s\n]+)(?:\s+\(([^)]+)\))?', scan_text):
             target = match.group(1)
             if target not in targets:
                 targets.append(target)
+            # Also capture the value in parentheses (could be IP or hostname)
+            alt = match.group(2)
+            if alt and alt not in targets:
+                targets.append(alt)
 
         return targets
 
@@ -136,7 +143,15 @@ class NmapFactExtractor:
             "ip_id_sequence": "",
             "host_scripts": [],
             "warnings": [],
-            "interesting_ports": []
+            "interesting_ports": [],
+            "nfs_shares": [],
+            "ftp_files": [],
+            "smb_shares": [],
+            "http_enum_findings": [],
+            "discovered_credentials": [],
+            "database_names": [],
+            "finger_users": [],
+            "exposed_files": []
         }
 
         lines = section.split('\n')
@@ -149,6 +164,8 @@ class NmapFactExtractor:
         # Parse each line
         current_script = None
         for line in lines[1:]:
+            line = line.strip()  # Remove leading/trailing whitespace for regex matching
+
             # Host status and latency
             if line.startswith('Host is'):
                 status_match = re.search(r'Host is (\w+)(?: \(([\d.]+)s latency\))?', line)
@@ -166,7 +183,7 @@ class NmapFactExtractor:
                     host["closed_ports_count"] = count
 
             # Open/filtered ports
-            port_match = re.match(r'(\d+)/(tcp|udp)\s+(open|filtered|closed)\s+(\S+)(?:\s+(.+))?', line)
+            port_match = re.match(r'(\d+)/(tcp|udp)\s+(open|filtered|closed|open\|filtered)\s+(\S+)(?:\s+(.+))?', line)
             if port_match:
                 port_info = {
                     "port": int(port_match.group(1)),
@@ -176,13 +193,13 @@ class NmapFactExtractor:
                     "version_info": port_match.group(5).strip() if port_match.group(5) else ""
                 }
 
-                if port_info["state"] == "open":
+                if port_info["state"] in ("open", "open|filtered"):
                     host["open_ports"].append(port_info)
                 elif port_info["state"] == "filtered":
                     host["filtered_ports"].append(port_info)
 
             # MAC Address
-            mac_match = re.search(r'MAC Address: ([0-9A-F:]+)(?: \((.+)\))?', line)
+            mac_match = re.search(r'MAC Address: ([0-9A-Fa-f:]+)(?: \((.+)\))?', line)
             if mac_match:
                 host["mac_address"] = mac_match.group(1)
                 if mac_match.group(2):
@@ -284,7 +301,230 @@ class NmapFactExtractor:
                 if interesting_match:
                     host["interesting_ports"].append(line.strip())
 
+        # === ADVANCED PATTERN EXTRACTION (Gemini's missing findings) ===
+        section_text = '\n'.join(lines)
+
+        # NFS Shares and File Listings - CRITICAL PATTERN
+        self._extract_nfs_data(section_text, host)
+
+        # FTP Directory Listings with Files
+        self._extract_ftp_data(section_text, host)
+
+        # SMB Shares with Files
+        self._extract_smb_data(section_text, host)
+
+        # HTTP-enum Findings (exposed dirs/files)
+        self._extract_http_enum_data(section_text, host)
+
+        # Discovered Credentials (brute force, default creds)
+        self._extract_credentials(section_text, host)
+
+        # Database Names (MySQL, Elasticsearch indices, etc.)
+        self._extract_database_info(section_text, host)
+
+        # Finger User Listings
+        self._extract_finger_users(section_text, host)
+
+        # Exposed Files (keys, configs, backups)
+        self._extract_exposed_files(section_text, host)
+
         return host
+
+    def _extract_nfs_data(self, text: str, host: Dict[str, Any]):
+        """Extract NFS shares and file listings - THE CRITICAL PATTERN GEMINI CAUGHT"""
+        # Pattern: nfs-showmount or nfs-ls output
+        # Example: /exports * or /root 10.0.50.1
+        nfs_showmount = re.findall(r'\|\s+(/[^\s]+)\s+([*\d.]+(?:/\d+)?)', text)
+        for path, access in nfs_showmount:
+            host["nfs_shares"].append({
+                "path": path,
+                "access_from": access,
+                "type": "nfs_mount"
+            })
+
+        # Extract nfs-ls file listings - CATCHES id_rsa, shadow.bak, etc.
+        # Pattern: -rw-r--r--  root  root  2048  id_rsa
+        file_listings = re.findall(r'\|\s+([d-][rwx-]{9})\s+(\S+)\s+(\S+)\s+(\d+)\s+(.+)', text)
+        for perms, owner, group, size, filename in file_listings:
+            host["exposed_files"].append({
+                "filename": filename.strip(),
+                "permissions": perms,
+                "owner": owner,
+                "group": group,
+                "size": int(size),
+                "source": "nfs-ls"
+            })
+
+    def _extract_ftp_data(self, text: str, host: Dict[str, Any]):
+        """Extract FTP anonymous access and directory listings"""
+        # Anonymous FTP
+        if 'ftp-anon:' in text.lower() or 'Anonymous FTP login allowed' in text:
+            host["discovered_credentials"].append({
+                "source": "FTP",
+                "service": "FTP",
+                "username": "anonymous",
+                "password": "none_required",
+                "access_level": "READ/WRITE" if 'drwxrwxrwx' in text else "READ"
+            })
+
+        # FTP directory listings
+        # Pattern: drwxrwxrwx    2 0        0            4096 Jan 02 09:15 pub
+        ftp_dirs = re.findall(r'\|\s*([d-][rwx-]{9})\s+\d+\s+\d+\s+\d+\s+\d+\s+\w+\s+\d+\s+[\d:]+\s+(.+?)(?:\[NSE:|$)', text)
+        for perms, dirname in ftp_dirs:
+            host["ftp_files"].append({
+                "name": dirname.strip(),
+                "permissions": perms,
+                "type": "directory" if perms.startswith('d') else "file"
+            })
+
+    def _extract_smb_data(self, text: str, host: Dict[str, Any]):
+        """Extract SMB shares and access levels"""
+        # Pattern: \\10.0.50.5\backup$: or account_used: guest
+        smb_shares = re.findall(r'\\\\\S+\\([^:]+):\s*\n\s*\|\s+.*access:\s*(\S+(?:\s+\S+)?)', text, re.MULTILINE)
+        for share_name, access_type in smb_shares:
+            host["smb_shares"].append({
+                "share_name": share_name.strip(),
+                "access": access_type.strip(),
+                "authentication": "guest" if "guest" in text.lower() else "authenticated"
+            })
+
+        # SMB computer name and workgroup
+        computer_name = re.search(r'NetBIOS computer name:\s*(\S+)', text)
+        workgroup = re.search(r'Workgroup:\s*(\S+)', text)
+        if computer_name:
+            host["os_detection"]["netbios_name"] = computer_name.group(1)
+        if workgroup:
+            host["os_detection"]["workgroup"] = workgroup.group(1)
+
+    def _extract_http_enum_data(self, text: str, host: Dict[str, Any]):
+        """Extract http-enum findings (exposed directories and files)"""
+        # Pattern: /admin/: Possible admin folder or /.git/HEAD: Git repository found
+        http_findings = re.findall(r'\|\s+(/[^:]+):\s*(.+?)(?:\n|$)', text)
+        for path, description in http_findings:
+            if any(keyword in path.lower() for keyword in ['.git', 'admin', 'backup', 'config', 'phpmyadmin', 'server-status', '.env', 'phpinfo']):
+                host["http_enum_findings"].append({
+                    "path": path.strip(),
+                    "description": description.strip(),
+                    "risk": "HIGH" if any(x in path.lower() for x in ['.git', 'backup', 'config', '.env']) else "MEDIUM"
+                })
+
+    def _extract_credentials(self, text: str, host: Dict[str, Any]):
+        """Extract discovered credentials from brute force and default credential checks"""
+        # Brute force results
+        # Pattern: admin:admin123 - Valid credentials
+        brute_force_creds = re.findall(r'\|\s+([^:]+):([^\s]+)\s+-\s+Valid credentials', text)
+        for username, password in brute_force_creds:
+            host["discovered_credentials"].append({
+                "source": "brute_force",
+                "username": username.strip(),
+                "password": password.strip(),
+                "status": "valid"
+            })
+
+        # Default credentials
+        # Pattern: [VULNERABLE] Tomcat Manager (admin:admin)
+        default_creds = re.findall(r'\[VULNERABLE\]\s+([^(]+)\s+\(([^:]+):([^)]+)\)', text)
+        for service, username, password in default_creds:
+            host["discovered_credentials"].append({
+                "source": "default_credentials",
+                "service": service.strip(),
+                "username": username.strip(),
+                "password": password.strip(),
+                "status": "default"
+            })
+
+        # Empty password / no auth required
+        if 'empty password' in text.lower() or 'No auth required' in text.lower() or 'No password required' in text.lower():
+            empty_pass_matches = re.findall(r'(\S+)\s+user\s+has\s+empty\s+password', text, re.IGNORECASE)
+            for username in empty_pass_matches:
+                host["discovered_credentials"].append({
+                    "source": "empty_password",
+                    "username": username.strip(),
+                    "password": "",
+                    "status": "CRITICAL"
+                })
+
+            # No password required pattern
+            no_pass_matches = re.findall(r'(\S+)\s+from\s+\S+\s+-\s+No\s+password\s+required', text, re.IGNORECASE)
+            for username in no_pass_matches:
+                host["discovered_credentials"].append({
+                    "source": "no_auth_required",
+                    "username": username.strip(),
+                    "password": "not_required",
+                    "status": "CRITICAL"
+                })
+
+    def _extract_database_info(self, text: str, host: Dict[str, Any]):
+        """Extract database names and indices"""
+        # MySQL databases
+        # Pattern: |   customer_data or |_  wordpress_prod
+        if 'mysql-databases:' in text.lower() or 'mysql-enum' in text.lower():
+            db_names = re.findall(r'\|\s+([a-zA-Z_][a-zA-Z0-9_]+)(?:\n|$)', text)
+            for db_name in db_names:
+                if db_name not in ['information_schema', 'mysql', 'performance_schema']:
+                    host["database_names"].append({
+                        "type": "MySQL",
+                        "name": db_name.strip()
+                    })
+
+        # Elasticsearch indices
+        # Pattern: elasticsearch-indices: logs-2024, customers, credentials_backup
+        es_indices = re.findall(r'elasticsearch-indices:\s*\n((?:\|\s+\S+\s*\n?)+)', text, re.IGNORECASE)
+        for index_block in es_indices:
+            indices = re.findall(r'\|\s+(\S+)', index_block)
+            for index_name in indices:
+                host["database_names"].append({
+                    "type": "Elasticsearch",
+                    "name": index_name.strip()
+                })
+
+    def _extract_finger_users(self, text: str, host: Dict[str, Any]):
+        """Extract user information from finger service"""
+        # Pattern: | root      root       pts/0          Jan  6 08:15 (10.0.50.1)
+        finger_users = re.findall(r'\|\s+(\S+)\s+([^\s]+(?:\s+[^\s]+)?)\s+(pts/\d+|\*)\s+([^\s]+)?\s+([A-Z][a-z]{2}\s+\d+\s+[\d:]+)(?:\s+\(([^)]+)\))?', text)
+        for username, fullname, tty, idle, login_time, login_from in finger_users:
+            host["finger_users"].append({
+                "username": username.strip(),
+                "full_name": fullname.strip(),
+                "tty": tty.strip(),
+                "idle_time": idle.strip() if idle else "active",
+                "login_time": login_time.strip(),
+                "login_from": login_from.strip() if login_from else "local"
+            })
+
+    def _extract_exposed_files(self, text: str, host: Dict[str, Any]):
+        """Extract exposed sensitive files (SSH keys, password files, configs)"""
+        # Pattern: -rw-r--r--  root  root  2048  id_rsa
+        sensitive_patterns = [
+            r'id_rsa', r'id_dsa', r'id_ecdsa', r'id_ed25519',  # SSH keys
+            r'shadow\.bak', r'passwd\.bak', r'shadow$', r'passwd$',  # Password files
+            r'\.pem$', r'\.key$', r'\.crt$',  # Certificate files
+            r'config\.php', r'\.env', r'web\.config',  # Config files
+            r'backup', r'\.sql', r'\.db', r'database'  # Backup files
+        ]
+
+        for pattern in sensitive_patterns:
+            matches = re.finditer(pattern, text, re.IGNORECASE)
+            for match in matches:
+                # Try to extract full context around the match
+                context_start = max(0, match.start() - 100)
+                context_end = min(len(text), match.end() + 50)
+                context = text[context_start:context_end]
+
+                # Look for file permissions in context
+                file_info = re.search(r'([d-][rwx-]{9})\s+(\S+)\s+(\S+)\s+(\d+)\s+(.+)', context)
+                if file_info:
+                    filename = file_info.group(5).strip()
+                    if not any(existing['filename'] == filename for existing in host["exposed_files"]):
+                        host["exposed_files"].append({
+                            "filename": filename,
+                            "permissions": file_info.group(1),
+                            "owner": file_info.group(2),
+                            "group": file_info.group(3),
+                            "size": int(file_info.group(4)),
+                            "source": "pattern_match",
+                            "risk": "CRITICAL" if any(x in filename.lower() for x in ['id_rsa', 'shadow', '.env', '.pem']) else "HIGH"
+                        })
 
     def _create_summary(self, facts: Dict[str, Any]) -> Dict[str, Any]:
         """Create summary statistics"""
@@ -326,10 +566,13 @@ class NmapFactExtractor:
         lines.append("FACTS EXTRACTED FROM SCAN:")
         lines.append("")
 
-        # Target
+        # Targets
         if facts["targets"]:
-            lines.append(f"Q: What IP/hostname was scanned?")
-            lines.append(f"A: {facts['targets'][0]}")
+            lines.append(f"Q: What IPs/hostnames were scanned?")
+            if len(facts["targets"]) == 1:
+                lines.append(f"A: {facts['targets'][0]}")
+            else:
+                lines.append(f"A: {', '.join(facts['targets'])}")
             lines.append("")
 
         # Scan metadata
@@ -407,6 +650,15 @@ class NmapFactExtractor:
                 lines.append(f"A: No filtered ports detected")
                 lines.append("")
 
+            if host.get("os_detection", {}).get("netbios_name"):
+                netbios = host['os_detection']['netbios_name']
+                workgroup = host.get('os_detection', {}).get('workgroup', '')
+                lines.append(f"Q: What is the hostname/computer name of this host?")
+                lines.append(f"A: {netbios} (discovered via SMB/NetBIOS)")
+                if workgroup:
+                    lines.append(f"   Workgroup/Domain: {workgroup}")
+                lines.append("")
+
             if host.get("os_detection", {}).get("os_family"):
                 lines.append(f"Q: What OS was detected?")
                 lines.append(f"A: {host['os_detection']['os_family']}")
@@ -471,6 +723,65 @@ class NmapFactExtractor:
                 lines.append(f"Q: Any interesting ports summary?")
                 for summary in host["interesting_ports"]:
                     lines.append(f"A: {summary}")
+                lines.append("")
+
+            # === NEW CRITICAL FINDINGS (Gemini's patterns) ===
+            if host.get("nfs_shares"):
+                lines.append(f"Q: Are there any NFS shares exposed?")
+                for share in host["nfs_shares"]:
+                    lines.append(f"A: Yes - {share['path']} accessible from {share['access_from']}")
+                lines.append("")
+
+            if host.get("exposed_files"):
+                lines.append(f"Q: Were any sensitive files discovered?")
+                for file in host["exposed_files"]:
+                    risk_label = f" [RISK: {file.get('risk', 'UNKNOWN')}]" if 'risk' in file else ""
+                    lines.append(f"A: {file['filename']} ({file['permissions']}) owned by {file['owner']}:{file['group']}, size: {file['size']} bytes{risk_label}")
+                lines.append("")
+
+            if host.get("discovered_credentials"):
+                lines.append(f"Q: Were any credentials discovered?")
+                for cred in host["discovered_credentials"]:
+                    if cred['source'] == 'brute_force':
+                        lines.append(f"A: Brute force found: {cred['username']}:{cred['password']} (valid)")
+                    elif cred['source'] == 'default_credentials':
+                        lines.append(f"A: Default credentials: {cred.get('service', 'service')} - {cred['username']}:{cred['password']}")
+                    elif cred['source'] == 'empty_password':
+                        lines.append(f"A: CRITICAL - {cred['username']} has EMPTY PASSWORD")
+                    elif cred['source'] == 'no_auth_required':
+                        lines.append(f"A: CRITICAL - {cred['username']} requires NO AUTHENTICATION")
+                    elif cred['source'] == 'FTP':
+                        lines.append(f"A: Anonymous FTP access allowed ({cred.get('access_level', 'unknown')})")
+                lines.append("")
+
+            if host.get("smb_shares"):
+                lines.append(f"Q: Are there any SMB shares accessible?")
+                for share in host["smb_shares"]:
+                    lines.append(f"A: Share '{share['share_name']}' with {share['access']} access ({share['authentication']})")
+                lines.append("")
+
+            if host.get("http_enum_findings"):
+                lines.append(f"Q: Were any sensitive web directories/files found?")
+                for finding in host["http_enum_findings"]:
+                    lines.append(f"A: {finding['path']} - {finding['description']} [RISK: {finding['risk']}]")
+                lines.append("")
+
+            if host.get("database_names"):
+                lines.append(f"Q: What database names or indices were found?")
+                for db in host["database_names"]:
+                    lines.append(f"A: {db['type']} database/index: {db['name']}")
+                lines.append("")
+
+            if host.get("finger_users"):
+                lines.append(f"Q: What users were found via finger?")
+                for user in host["finger_users"]:
+                    lines.append(f"A: User {user['username']} ({user['full_name']}) logged in from {user['login_from']} at {user['login_time']}")
+                lines.append("")
+
+            if host.get("ftp_files"):
+                lines.append(f"Q: What files/directories are in the FTP server?")
+                for file in host["ftp_files"]:
+                    lines.append(f"A: {file['name']} ({file['permissions']}) - {file['type']}")
                 lines.append("")
 
         lines.append("---")

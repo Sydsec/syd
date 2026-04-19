@@ -1,0 +1,189 @@
+{
+  "knowledge_base_part": 2,
+  "categories": [
+    {
+      "id": "nse_vulnerability",
+      "name": "NSE Scripts - Vulnerability Detection",
+      "topics": [
+        {
+          "title": "SMB Vulnerability Scripts",
+          "keywords": ["smb-vuln", "MS17-010", "EternalBlue", "SMBGhost", "CVE-2017-0144", "CVE-2020-0796"],
+          "difficulty": "advanced",
+          "content": "Critical for Windows networks. smb-vuln-ms17-010 detects EternalBlue (CVE-2017-0144) - WannaCry/NotPetya exploit, RCE on Windows Vista through 10, Server 2008-2016. smb-vuln-cve-2020-0796 detects SMBGhost in SMB 3.1.1 compression (Windows 10 1903/1909). Other scripts: smb-vuln-ms08-067 (Conficker), smb-vuln-cve-2017-7494 (SambaCry for Linux). Scripts are safe - detect without exploiting. Use --script-args=unsafe=1 for aggressive checks (may crash services).",
+          "examples": [
+            {"command": "nmap -p 445 --script smb-vuln-ms17-010 192.168.1.1", "explanation": "Check for EternalBlue", "use_case": "Critical Windows vulnerability assessment"},
+            {"command": "nmap -p 445 --script smb-vuln-* 192.168.1.0/24", "explanation": "All SMB vulns across subnet", "use_case": "Comprehensive SMB vulnerability scan"},
+            {"command": "nmap -p 445 --script smb-vuln-cve-2020-0796 192.168.1.1", "explanation": "Check for SMBGhost", "use_case": "Windows 10 1903/1909 assessment"},
+            {"command": "nmap -p 445 --script smb-vuln-cve-2017-7494 192.168.1.100", "explanation": "SambaCry for Linux", "use_case": "Linux Samba RCE check"}
+          ],
+          "warnings": ["smb-vuln-regsvc-dos can crash Remote Registry", "--script-args=unsafe=1 may disrupt services", "IDS/AV may flag as attacks"],
+          "best_practices": ["Run smb-vuln-* on all Windows with 445 open", "Verify critical findings manually", "Prioritize MS17-010 and SMBGhost"],
+          "related_cves": ["CVE-2017-0144", "CVE-2020-0796", "CVE-2017-7494", "CVE-2008-4250"],
+          "related_topics": ["SMB Enumeration", "Windows Exploitation"]
+        },
+        {
+          "title": "SSL/TLS Vulnerability Scripts",
+          "keywords": ["ssl-heartbleed", "ssl-poodle", "ssl-ccs-injection", "CVE-2014-0160", "Heartbleed"],
+          "difficulty": "advanced",
+          "content": "ssl-heartbleed detects CVE-2014-0160 (Heartbleed) - OpenSSL buffer over-read leaking memory including private keys. Affects OpenSSL 1.0.1-1.0.1f. ssl-poodle checks CVE-2014-3566 - SSLv3 CBC attack, mitigation is disabling SSLv3. ssl-ccs-injection detects CVE-2014-0224 - OpenSSL CCS MITM. ssl-dh-params checks for weak DH/Logjam. ssl-enum-ciphers grades all cipher suites A-F.",
+          "examples": [
+            {"command": "nmap -p 443 --script ssl-heartbleed 192.168.1.1", "explanation": "Check for Heartbleed", "use_case": "Critical OpenSSL vulnerability check"},
+            {"command": "nmap --script ssl-* -p 443,8443 192.168.1.1", "explanation": "All SSL vulnerability scripts", "use_case": "Comprehensive SSL/TLS assessment"},
+            {"command": "nmap --script ssl-enum-ciphers -p 443 192.168.1.1", "explanation": "Enumerate and grade all ciphers", "use_case": "TLS configuration audit"},
+            {"command": "nmap --script ssl-cert -p 443 192.168.1.1", "explanation": "Extract certificate details", "use_case": "Certificate audit and expiration check"}
+          ],
+          "warnings": ["ssl-heartbleed may trigger IDS", "Heavy TLS scanning causes server load", "Some scripts need specific TLS versions"],
+          "best_practices": ["Scan all TLS ports not just 443", "Use ssl-enum-ciphers for compliance", "Combine with testssl.sh for deep analysis"],
+          "related_cves": ["CVE-2014-0160", "CVE-2014-3566", "CVE-2014-0224", "CVE-2015-4000"],
+          "related_topics": ["Web Scanning", "Compliance"]
+        },
+        {
+          "title": "HTTP Vulnerability Scripts",
+          "keywords": ["http-vuln", "http-slowloris", "http-shellshock", "CVE-2007-6750", "CVE-2014-6271"],
+          "difficulty": "advanced",
+          "content": "http-slowloris-check detects CVE-2007-6750 (Slowloris DoS) - holds partial connections to exhaust resources. CAUTION: can cause actual DoS. http-shellshock tests CVE-2014-6271 (Shellshock) - Bash RCE via CGI. Tests /cgi-bin/*.cgi paths. http-vuln-cve2017-5638 (Struts RCE), http-vuln-cve2015-1635 (MS15-034 IIS HTTP.sys RCE), http-vuln-cve2014-3704 (Drupalgeddon).",
+          "examples": [
+            {"command": "nmap -p 80,443 --script http-shellshock --script-args uri=/cgi-bin/status.cgi 192.168.1.1", "explanation": "Check specific CGI for Shellshock", "use_case": "Testing known CGI endpoints"},
+            {"command": "nmap -p 80,443 --script http-vuln-* 192.168.1.1", "explanation": "All HTTP vulnerability scripts", "use_case": "Comprehensive web vuln scan"},
+            {"command": "nmap -p 80 --script http-slowloris-check 192.168.1.1", "explanation": "Slowloris DoS test (caution!)", "use_case": "DoS resilience assessment"},
+            {"command": "nmap -p 443 --script http-vuln-cve2015-1635 192.168.1.1", "explanation": "MS15-034 HTTP.sys RCE", "use_case": "IIS vulnerability check"}
+          ],
+          "warnings": ["http-slowloris-check can cause DoS", "http-sql-injection triggers WAF/IDS", "Scripts leave log entries"],
+          "best_practices": ["Identify web tech before running specific scripts", "Use dedicated web scanners for thorough testing", "Avoid DoS scripts without explicit authorization"],
+          "related_cves": ["CVE-2007-6750", "CVE-2014-6271", "CVE-2017-5638", "CVE-2015-1635"],
+          "related_topics": ["Web Scanning", "CGI Enumeration"]
+        },
+        {
+          "title": "RDP Vulnerability Scripts",
+          "keywords": ["rdp-vuln", "BlueKeep", "CVE-2019-0708", "RDP security", "MS12-020"],
+          "difficulty": "advanced",
+          "content": "rdp-vuln-ms12-020 detects CVE-2012-0002 - pre-auth RCE in RDP. BlueKeep (CVE-2019-0708) is critical pre-auth RCE affecting Windows 7, Server 2008, XP, Server 2003 - wormable like WannaCry. rdp-ntlm-info extracts system info without creds: computer name, domain, OS version. rdp-enum-encryption checks NLA status which affects exploitability.",
+          "examples": [
+            {"command": "nmap -p 3389 --script rdp-vuln-ms12-020 192.168.1.1", "explanation": "Check MS12-020 pre-auth RCE", "use_case": "Critical RDP vulnerability check"},
+            {"command": "nmap -p 3389 --script rdp-* 192.168.1.0/24", "explanation": "All RDP scripts across subnet", "use_case": "Comprehensive RDP assessment"},
+            {"command": "nmap -p 3389 --script rdp-ntlm-info 192.168.1.1", "explanation": "Extract system info via RDP", "use_case": "Reconnaissance without authentication"},
+            {"command": "nmap -p 3389 --script rdp-enum-encryption 192.168.1.1", "explanation": "Check RDP encryption and NLA", "use_case": "Assess RDP security configuration"}
+          ],
+          "warnings": ["BlueKeep exploitation can crash systems", "Some scripts may cause BSOD on old systems", "RDP scanning triggers SOC alerts"],
+          "best_practices": ["Scan all Windows for RDP exposure", "Prioritize BlueKeep as critical", "Check NLA status for exploitability assessment"],
+          "related_cves": ["CVE-2019-0708", "CVE-2012-0002", "CVE-2019-1181", "CVE-2019-1182"],
+          "related_topics": ["Windows Exploitation", "Patch Verification"]
+        }
+      ]
+    },
+    {
+      "id": "nse_enumeration",
+      "name": "NSE Scripts - Discovery and Enumeration",
+      "topics": [
+        {
+          "title": "SMB Enumeration Scripts",
+          "keywords": ["smb-enum-shares", "smb-enum-users", "smb-os-discovery", "smb-protocols", "null session"],
+          "difficulty": "intermediate",
+          "content": "smb-os-discovery extracts Windows version, computer name, domain via null session. smb-enum-shares lists accessible shares including admin shares (C$, ADMIN$). smb-enum-users enumerates usernames via SAM/LSA queries. smb-protocols identifies SMB versions (SMB1 = legacy/vulnerable). smb-security-mode checks signing - disabled signing enables relay attacks. smb-enum-sessions shows active logins.",
+          "examples": [
+            {"command": "nmap -p 445 --script smb-os-discovery 192.168.1.1", "explanation": "Extract Windows/domain info", "use_case": "Initial Windows reconnaissance"},
+            {"command": "nmap -p 445 --script smb-enum-shares,smb-enum-users 192.168.1.1", "explanation": "Enumerate shares and users", "use_case": "Gathering attack surface info"},
+            {"command": "nmap -p 445 --script smb-enum-shares --script-args smbusername=user,smbpassword=pass 192.168.1.1", "explanation": "Authenticated share enumeration", "use_case": "Deep enumeration with creds"},
+            {"command": "nmap -p 445 --script smb-security-mode 192.168.1.0/24", "explanation": "Check SMB signing across network", "use_case": "Identifying relay attack opportunities"}
+          ],
+          "warnings": ["smb-enum-users may trigger failed logon events", "Heavy SMB enumeration is slow", "EDR may detect aggressive enumeration"],
+          "best_practices": ["Run early for environmental awareness", "Note SMB signing status for relay attacks", "Use authenticated enumeration after getting creds"],
+          "related_cves": [],
+          "related_topics": ["SMB Vulnerabilities", "Active Directory"]
+        },
+        {
+          "title": "HTTP Enumeration Scripts",
+          "keywords": ["http-enum", "http-methods", "http-headers", "http-title", "directory discovery"],
+          "difficulty": "intermediate",
+          "content": "http-enum performs directory/file brute-forcing: /admin, /backup, /phpmyadmin, etc. http-methods tests supported methods - dangerous ones: PUT, DELETE, TRACE. http-headers analyzes response headers for version info and missing security headers. http-title extracts page titles for quick app identification. http-vhosts discovers virtual hosts. http-generator finds CMS signatures.",
+          "examples": [
+            {"command": "nmap -p 80,443 --script http-enum 192.168.1.1", "explanation": "Directory/file discovery", "use_case": "Initial web enumeration"},
+            {"command": "nmap -p 80 --script http-methods --script-args http-methods.url-path='/webdav/' 192.168.1.1", "explanation": "Test methods on specific path", "use_case": "Checking WebDAV for dangerous methods"},
+            {"command": "nmap -p 80,443,8080 --script http-title 192.168.1.0/24", "explanation": "Extract titles across network", "use_case": "Quick identification of all web apps"},
+            {"command": "nmap -p 80 --script http-vhosts --script-args http-vhosts.domain=example.com 192.168.1.1", "explanation": "Virtual host discovery", "use_case": "Finding additional apps on shared hosting"}
+          ],
+          "warnings": ["http-enum causes significant logging", "Aggressive enumeration triggers WAF", "Large wordlists slow scanning"],
+          "best_practices": ["Run on all HTTP/HTTPS ports", "Follow up with dedicated web tools", "Check for missing security headers"],
+          "related_cves": [],
+          "related_topics": ["Web Scanning", "HTTP Vulnerabilities"]
+        },
+        {
+          "title": "LDAP and Active Directory Enumeration",
+          "keywords": ["ldap-rootdse", "ldap-search", "Active Directory", "AD enumeration", "domain enumeration"],
+          "difficulty": "advanced",
+          "content": "ldap-rootdse queries Root DSE for directory config: naming contexts, domain functional level, AD topology. ldap-search performs custom queries - enumerate users, groups, computers, OUs. Anonymous binding often allows reading many attributes. Can reveal password policies, Domain Admins members, trust relationships.",
+          "examples": [
+            {"command": "nmap -p 389 --script ldap-rootdse 192.168.1.1", "explanation": "Query LDAP Root DSE", "use_case": "Initial AD reconnaissance"},
+            {"command": "nmap -p 389 --script ldap-search --script-args 'ldap.base=\"dc=corp,dc=local\"' 192.168.1.1", "explanation": "Search with custom base", "use_case": "Enumerating domain objects"},
+            {"command": "nmap -p 636 --script ldap-rootdse 192.168.1.1", "explanation": "Query LDAPS (secure)", "use_case": "When standard LDAP blocked"}
+          ],
+          "warnings": ["ldap-brute may cause lockouts", "Anonymous LDAP often restricted in modern AD", "Queries are logged"],
+          "best_practices": ["Target domain controllers", "Try anonymous first, then authenticated", "Search for privileged groups"],
+          "related_cves": [],
+          "related_topics": ["Active Directory Attacks", "Domain Enumeration"]
+        }
+      ]
+    },
+    {
+      "id": "nse_brute",
+      "name": "NSE Scripts - Authentication and Brute Force",
+      "topics": [
+        {
+          "title": "Safe Credential Testing",
+          "keywords": ["brute force", "credential testing", "default passwords", "account lockout", "ssh-brute", "lockout prevention"],
+          "difficulty": "advanced",
+          "content": "Account lockout is primary risk - typically 3-5 failed attempts, 30 min lockout. Safe approach: password spraying (1 password x many users vs many passwords x 1 user). Use brute.delay for rate limiting: --script-args brute.delay=5s. Default credential scripts safer than full wordlists - test root:root, admin:admin first. Coordinate with client about policies before testing.",
+          "examples": [
+            {"command": "nmap -p 22 --script ssh-brute --script-args userdb=users.txt,passdb=passwords.txt,brute.delay=3s 192.168.1.1", "explanation": "SSH brute with delay", "use_case": "Rate-limited credential testing"},
+            {"command": "nmap -p 21 --script ftp-brute --script-args brute.mode=creds,brute.credfile=defaults.txt 192.168.1.1", "explanation": "Default creds only, stop on first success", "use_case": "Quick default password check"},
+            {"command": "nmap -p 3306 --script mysql-brute --script-args brute.retries=0,brute.firstonly 192.168.1.1", "explanation": "MySQL defaults with no retries", "use_case": "Safe MySQL default check"},
+            {"command": "nmap -p 445 --script smb-brute --script-args smbdomain=CORP,brute.emptypass=true 192.168.1.1", "explanation": "Check for empty SMB passwords", "use_case": "Testing for passwordless accounts"}
+          ],
+          "warnings": ["ALWAYS verify lockout policies first", "SMB brute on AD locks legitimate users", "High-rate testing triggers alerts", "Document all testing for legal protection"],
+          "best_practices": ["Use password spraying vs brute force", "Implement delays matching lockout thresholds", "Test default creds before wordlists", "Coordinate timing with client"],
+          "related_cves": [],
+          "related_topics": ["Account Lockout", "Password Policies"]
+        }
+      ]
+    },
+    {
+      "id": "firewall_evasion",
+      "name": "Firewall and IDS Evasion",
+      "topics": [
+        {
+          "title": "Packet Fragmentation",
+          "keywords": ["fragmentation", "-f", "--mtu", "IDS evasion", "firewall bypass"],
+          "difficulty": "advanced",
+          "content": "Splits probes into fragments that some IDS/firewalls fail to reassemble correctly. -f uses 8-byte fragments, -ff uses 16-byte. --mtu sets custom size (multiple of 8). Modern IDS handles fragmentation but combined with other techniques increases evasion. May cause packet loss. Some firewalls block all fragments. Works best for initial SYN scans, not detailed enumeration.",
+          "examples": [
+            {"command": "sudo nmap -f -sS 192.168.1.1", "explanation": "SYN scan with 8-byte fragments", "use_case": "Evading legacy IDS"},
+            {"command": "sudo nmap -ff -sS 192.168.1.1", "explanation": "16-byte fragments", "use_case": "Balanced fragmentation"},
+            {"command": "sudo nmap --mtu 24 -sS 192.168.1.1", "explanation": "Custom 24-byte MTU", "use_case": "Testing specific fragment sizes"},
+            {"command": "sudo nmap -f -T2 -D RND:5 192.168.1.1", "explanation": "Combined: fragments, slow timing, decoys", "use_case": "Maximum evasion attempt"}
+          ],
+          "warnings": ["May not work with version detection/scripts", "Some firewalls drop all fragments", "Increases scan time", "Modern IDS handles fragmentation"],
+          "best_practices": ["Test effectiveness before relying on it", "Combine with other evasion techniques", "Use for SYN scans primarily"],
+          "related_cves": [],
+          "related_topics": ["Decoy Scanning", "Timing Evasion"]
+        },
+        {
+          "title": "Decoy Scanning and Spoofing",
+          "keywords": ["decoy scan", "-D", "IP spoofing", "spoof-mac", "idle scan", "-sI", "source port"],
+          "difficulty": "advanced",
+          "content": "Decoys (-D) send forged packets from multiple IPs: -D decoy1,decoy2,ME,decoy3. RND:10 uses 10 random decoys. Target sees scans from multiple sources. Idle scan (-sI) uses zombie host for complete anonymity - never sends packets from your IP. Source port (--source-port 53) may bypass firewalls allowing DNS. MAC spoofing (--spoof-mac) works on local segment only.",
+          "examples": [
+            {"command": "sudo nmap -D 192.168.1.100,192.168.1.101,ME,192.168.1.102 192.168.1.1", "explanation": "Scan with 3 decoys", "use_case": "Obscuring scan source"},
+            {"command": "sudo nmap -D RND:10 -T2 192.168.1.1", "explanation": "10 random decoys with slow timing", "use_case": "Maximum source confusion"},
+            {"command": "sudo nmap -sI zombie.example.com:80 192.168.1.1", "explanation": "Idle scan via zombie", "use_case": "Complete source anonymity"},
+            {"command": "sudo nmap --source-port 53 -sS 192.168.1.1", "explanation": "Source port 53 (DNS)", "use_case": "Bypassing firewall allowing DNS"},
+            {"command": "sudo nmap --spoof-mac 0 -sS 192.168.1.1", "explanation": "Random MAC address", "use_case": "LAN scanning without revealing hardware"}
+          ],
+          "warnings": ["Decoy IPs may trace to innocents", "Idle scan needs suitable zombie", "MAC spoofing local segment only"],
+          "best_practices": ["Use live, diverse IPs as decoys", "Test idle scan prerequisites first", "Combine with timing controls"],
+          "related_cves": [],
+          "related_topics": ["Fragmentation", "Stealth Scanning"]
+        }
+      ]
+    }
+  ]
+}

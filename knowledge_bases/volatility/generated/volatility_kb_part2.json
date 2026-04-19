@@ -1,0 +1,333 @@
+{
+  "knowledge_base_part": 2,
+  "categories": [
+    {
+      "id": "code_injection",
+      "name": "Code Injection Detection",
+      "topics": [
+        {
+          "title": "Detecting Code Injection with Malfind",
+          "keywords": ["malfind", "code injection", "process injection", "shellcode", "RWX", "PAGE_EXECUTE_READWRITE", "injected code"],
+          "difficulty": "intermediate",
+          "content": "The malfind plugin is one of the most powerful tools for detecting code injection in memory. It identifies memory regions with suspicious characteristics, specifically looking for executable memory (PAGE_EXECUTE_READWRITE or PAGE_EXECUTE_WRITECOPY) that is not backed by a file on disk. Legitimate code comes from DLLs and executables mapped from files - injected code typically exists only in memory. Malfind examines each process's VAD (Virtual Address Descriptor) tree and flags regions that: have execute permissions AND write permissions (RWX), are committed memory not backed by files, and contain content that may be executable code. The output includes a hexdump and disassembly of suspicious regions. Key indicators: MZ headers (PE files injected into memory), shellcode patterns (NOP sleds, syscall stubs), strings referencing system calls or network activity. False positives occur with JIT compilers (.NET CLR, JavaScript engines), packed executables that unpack in memory, and some security products. However, these should be investigated to confirm legitimacy. Combine malfind with process analysis - injected code in a legitimate process (svchost, explorer) is more suspicious than in a specialized application.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.malfind.Malfind",
+              "explanation": "Scan all processes for suspicious executable memory regions indicating code injection",
+              "use_case": "Detecting injected shellcode, process hollowing, and fileless malware",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nPID     Process Start VPN       End VPN Tag     Protection      CommitCharge    PrivateMemory   File output     Hexdump Disasm\n\n4256    powershell.exe  0x1a0000        0x1a2fff        VadS    PAGE_EXECUTE_READWRITE  3       1       Disabled\n4d 5a 90 00 03 00 00 00 MZ......\n04 00 00 00 ff ff 00 00 ........\n58 45 f8 00 00 00 00 00 XE......\n00 00 00 00 00 00 00 00 ........\n00 00 00 00 00 00 00 00 ........\n00 00 00 00 00 00 00 00 ........\n00 00 00 00 f8 00 00 00 ........\n0e 1f ba 0e 00 b4 09 cd ........\n0x1a0000:       dec     ebp\n0x1a0001:       pop     edx\n0x1a0002:       nop\n0x1a0003:       add     byte ptr [ebx], al\n\n2156    explorer.exe    0x3b0000        0x3b1fff        VadS    PAGE_EXECUTE_READWRITE  2       1       Disabled\nfc 48 83 e4 f0 e8 c8 00 .H......\n00 00 41 51 41 50 52 51 ..AQAPRQ\n56 48 31 d2 65 48 8b 52 VH1.eH.R\n60 48 8b 52 18 48 8b 52 `H.R.H.R\n20 48 8b 72 50 48 0f b7  H.rPH..\n4a 4a 4d 31 c9 48 31 c0 JJM1.H1.\n0x3b0000:       cld\n0x3b0001:       rex.W\n0x3b0002:       and     esp, 0xfffffff0\n0x3b0005:       call    0x3b00d2\n\n6672    malware.exe     0x400000        0x402fff        VadS    PAGE_EXECUTE_READWRITE  3       1       Disabled\n4d 5a 90 00 03 00 00 00 MZ......\n04 00 00 00 ff ff 00 00 ........\nb8 00 00 00 00 00 00 00 ........\n40 00 00 00 00 00 00 00 @.......\n00 00 00 00 00 00 00 00 ........\n00 00 00 00 00 00 00 00 ........\n00 00 00 00 00 00 00 00 ........\ne8 00 00 00 00 0e 1f ba ........\n0x400000:       dec     ebp\n0x400001:       pop     edx\n0x400002:       nop"
+            },
+            {
+              "command": "vol -f memory.dmp windows.malfind.Malfind --pid 2156",
+              "explanation": "Scan specific process (explorer.exe) for injected code",
+              "use_case": "Focused analysis of suspected process injection in legitimate Windows process",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nPID     Process Start VPN       End VPN Tag     Protection      CommitCharge    PrivateMemory   File output     Hexdump Disasm\n\n2156    explorer.exe    0x3b0000        0x3b1fff        VadS    PAGE_EXECUTE_READWRITE  2       1       Disabled\nfc 48 83 e4 f0 e8 c8 00 .H......\n00 00 41 51 41 50 52 51 ..AQAPRQ\n56 48 31 d2 65 48 8b 52 VH1.eH.R\n60 48 8b 52 18 48 8b 52 `H.R.H.R\n20 48 8b 72 50 48 0f b7  H.rPH..\n4a 4a 4d 31 c9 48 31 c0 JJM1.H1.\nac 3c 61 7c 02 2c 20 41 .<a|., A\n0x3b0000:       cld\n0x3b0001:       rex.W\n0x3b0002:       and     esp, 0xfffffff0\n0x3b0005:       call    0x3b00d2\n\n[ANALYSIS: This is classic 64-bit Metasploit/Cobalt Strike shellcode. The 'fc 48 83 e4 f0' pattern is the standard x64 shellcode prologue that clears direction flag and aligns stack. This in explorer.exe indicates active code injection.]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.malfind.Malfind --dump",
+              "explanation": "Dump all suspicious memory regions to files for further analysis",
+              "use_case": "Extracting injected code for reverse engineering or signature development",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nPID     Process Start VPN       End VPN Tag     Protection      CommitCharge    PrivateMemory   File output     Hexdump Disasm\n\n4256    powershell.exe  0x1a0000        0x1a2fff        VadS    PAGE_EXECUTE_READWRITE  3       1       pid.4256.vad.0x1a0000-0x1a2fff.dmp\n2156    explorer.exe    0x3b0000        0x3b1fff        VadS    PAGE_EXECUTE_READWRITE  2       1       pid.2156.vad.0x3b0000-0x3b1fff.dmp\n6672    malware.exe     0x400000        0x402fff        VadS    PAGE_EXECUTE_READWRITE  3       1       pid.6672.vad.0x400000-0x402fff.dmp\n\n[Files saved to output directory]"
+            }
+          ],
+          "warnings": [
+            "False positives occur with .NET/CLR applications, JavaScript engines, and JIT compilers",
+            "Some legitimate security software uses RWX memory for hooks",
+            "Absence of malfind results doesn't mean system is clean - some techniques evade detection",
+            "Large memory dumps may take considerable time to scan"
+          ],
+          "best_practices": [
+            "Focus on injected code in system processes (svchost, explorer, lsass) - these are high-priority",
+            "Look for MZ headers (4d 5a) indicating PE files loaded in non-file-backed memory",
+            "Recognize common shellcode patterns: fc 48 83 e4 f0 (x64 prologue), 90 90 90 (NOP sled)",
+            "Dump suspicious regions with --dump for offline analysis with IDA or Ghidra",
+            "Cross-reference with netscan to see if injected code process has network connections",
+            "Compare findings against known malware signatures using YARA"
+          ],
+          "related_cves": [],
+          "related_topics": ["Process Injection", "Shellcode Analysis", "YARA Scanning"]
+        },
+        {
+          "title": "VAD Analysis for Memory Forensics",
+          "keywords": ["VAD", "Virtual Address Descriptor", "vadinfo", "vadwalk", "memory regions", "memory protection", "process memory"],
+          "difficulty": "advanced",
+          "content": "VAD (Virtual Address Descriptor) trees describe the virtual memory layout of each process. Understanding VADs is crucial for advanced memory forensics as they reveal all memory regions, their protections, backing files, and relationships. The vadinfo plugin provides detailed information about each VAD including start/end addresses, memory protection flags, whether the region is private or mapped, and the backing file path if applicable. VAD analysis reveals: memory regions with suspicious protections, unbacked executable regions (injected code), memory-mapped files, heap regions, stack locations, and PEB/TEB structures. The vadwalk plugin shows the VAD tree structure itself. Key protection flags to watch: PAGE_EXECUTE_READWRITE (RWX - rarely legitimate), PAGE_EXECUTE_WRITECOPY (often used in process hollowing), and changes from initial protections. Memory regions can transition through protection changes - malware often allocates RW, writes code, then changes to RX. VAD analysis combined with malfind provides comprehensive code injection detection.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.vadinfo.VadInfo --pid 2156",
+              "explanation": "Show detailed VAD information for explorer.exe to understand its memory layout",
+              "use_case": "Deep dive into process memory structure for injection detection",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nPID     Process Offset  Start   End     Tag     Protection      CommitCharge    PrivateMemory   Parent  File\n\n2156    explorer.exe    0xfa801ac78340  0x7ff6abcd0000  0x7ff6abce0fff  Vad     PAGE_EXECUTE_READ       17      0       N/A     \\Windows\\explorer.exe\n2156    explorer.exe    0xfa801ac78340  0x7ff845120000  0x7ff84531ffff  Vad     PAGE_EXECUTE_READ       512     0       N/A     \\Windows\\System32\\ntdll.dll\n2156    explorer.exe    0xfa801ac78340  0x7ff844320000  0x7ff8443dcfff  Vad     PAGE_EXECUTE_READ       189     0       N/A     \\Windows\\System32\\kernel32.dll\n2156    explorer.exe    0xfa801ac78340  0x3b0000        0x3b1fff        VadS    PAGE_EXECUTE_READWRITE  2       1       N/A     <No File>\n2156    explorer.exe    0xfa801ac78340  0x1000000       0x10fffff       VadS    PAGE_READWRITE  256     1       N/A     <No File>\n2156    explorer.exe    0xfa801ac78340  0x2000000       0x200ffff       VadS    PAGE_READWRITE  16      1       N/A     <No File>\n2156    explorer.exe    0xfa801ac78340  0x7ffe0000      0x7ffeffff      Vad     PAGE_READONLY   16      0       N/A     <SharedMemory>\n\n[ANALYSIS: VAD at 0x3b0000-0x3b1fff has PAGE_EXECUTE_READWRITE (RWX) and NO backing file - this is the injected code region also flagged by malfind. Legitimate DLLs have file paths and PAGE_EXECUTE_READ protection.]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.vadwalk.VadWalk --pid 4256",
+              "explanation": "Walk the VAD tree structure for PowerShell process",
+              "use_case": "Understanding complete memory layout and identifying all memory regions",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nPID     Process Start   End     Tag     Protection      CommitCharge    PrivateMemory\n\n4256    powershell.exe  0x10000 0x1ffff VadS    PAGE_READWRITE  16      1\n4256    powershell.exe  0x1a0000        0x1a2fff        VadS    PAGE_EXECUTE_READWRITE  3       1\n4256    powershell.exe  0x400000        0x41ffff        VadS    PAGE_READWRITE  32      1\n4256    powershell.exe  0x7ff658910000  0x7ff658929fff  Vad     PAGE_EXECUTE_READ       26      0\n4256    powershell.exe  0x7ff841230000  0x7ff841ac9fff  Vad     PAGE_EXECUTE_READ       2330    0\n4256    powershell.exe  0x7ff842010000  0x7ff8420adfff  Vad     PAGE_EXECUTE_READ       158     0\n4256    powershell.exe  0x7ff845120000  0x7ff84531ffff  Vad     PAGE_EXECUTE_READ       512     0\n4256    powershell.exe  0x7ffe0000      0x7ffeffff      Vad     PAGE_READONLY   16      0"
+            }
+          ],
+          "warnings": [
+            "VAD analysis requires understanding of Windows memory management internals",
+            "Some legitimate applications use RWX memory for performance (but should be verified)",
+            "Memory protection can be changed at runtime - initial protection may differ from current",
+            "Large processes can have hundreds of VADs - focus on unusual ones"
+          ],
+          "best_practices": [
+            "Look for VadS (short VAD) entries with PAGE_EXECUTE_READWRITE and no file backing",
+            "Compare VAD structure between similar processes to identify anomalies",
+            "Use vadinfo to get file paths and verify against expected DLLs",
+            "Cross-reference suspicious VAD regions with malfind output",
+            "Document all RWX regions even if they appear benign"
+          ],
+          "related_cves": [],
+          "related_topics": ["Malfind", "Process Memory", "Code Injection"]
+        },
+        {
+          "title": "YARA Scanning in Memory",
+          "keywords": ["yarascan", "YARA", "signature scanning", "malware detection", "pattern matching", "IOC scanning"],
+          "difficulty": "intermediate",
+          "content": "YARA scanning allows you to search memory for specific patterns, strings, or signatures. The yarascan plugin in Volatility 3 applies YARA rules against process memory or kernel memory. This is powerful for: detecting known malware families, finding specific strings or patterns, identifying malware variants, and custom IOC hunting. YARA rules can match on strings, hex patterns, regular expressions, file magic, and conditions combining multiple patterns. You can scan specific processes with --pid, kernel memory with --kernel, or all processes. The output shows which rules matched, in which process, and at what address. Writing effective YARA rules requires understanding malware behavior - look for unique strings, API call patterns, encryption constants, or C2 communication markers. Pre-built YARA rule sets are available from security researchers and organizations. For memory forensics, consider rules that detect injected code patterns, shellcode signatures, and known APT tools.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp yarascan.YaraScan --yara-file malware_rules.yar",
+              "explanation": "Scan all process memory with a YARA rule file",
+              "use_case": "Detecting known malware families and signatures across all processes",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  PID     Rule    Component       Value\n\n0x3b0045        2156    Cobalt_Strike_Beacon    $beacon_config  {69 68 6f 6f 6b 73 2e 73 74 61 67 65}\n0x3b0120        2156    Cobalt_Strike_Beacon    $pipe_string    \\\\.\\pipe\\MSSE-1234-server\n0x1a0000        4256    Metasploit_Meterpreter  $meterp_header  {4d 5a 90 00 03 00 00 00 04 00}\n0x1a0500        4256    Metasploit_Meterpreter  $rev_tcp        {6a 00 53 89 e1 68 02 00}\n0x400034        6672    Generic_Shellcode       $shellcode_x64  {fc 48 83 e4 f0 e8}\n0x402100        6672    Mimikatz_Strings        $sekurlsa       sekurlsa::logonpasswords\n\n[ANALYSIS: Multiple high-confidence malware detections:\n- Cobalt Strike beacon in explorer.exe (PID 2156) - active C2\n- Metasploit meterpreter in powershell.exe (PID 4256)\n- Mimikatz strings in malware.exe (PID 6672) - credential theft]"
+            },
+            {
+              "command": "vol -f memory.dmp yarascan.YaraScan --yara-rules \"rule find_beacon { strings: $a = \\\"beacon\\\" wide ascii condition: $a }\"",
+              "explanation": "Quick inline YARA rule for ad-hoc searching",
+              "use_case": "Rapid IOC hunting without creating rule files",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  PID     Rule    Component       Value\n\n0x3b0200        2156    find_beacon     $a      beacon\n0x3b0450        2156    find_beacon     $a      b.e.a.c.o.n (wide)"
+            },
+            {
+              "command": "vol -f memory.dmp yarascan.YaraScan --yara-file shellcode.yar --pid 2156",
+              "explanation": "Targeted YARA scan of specific process memory only",
+              "use_case": "Focused malware detection in suspected compromised process",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  PID     Rule    Component       Value\n\n0x3b0000        2156    Generic_Shellcode_x64   $prologue       {fc 48 83 e4 f0}\n0x3b0010        2156    Generic_Shellcode_x64   $peb_access     {65 48 8b 52 60}\n0x3b0020        2156    Generic_Shellcode_x64   $kernel32_hash  {e8 c8 00 00 00}"
+            }
+          ],
+          "warnings": [
+            "YARA scanning can be slow on large memory dumps - use --pid to focus when possible",
+            "Overly broad rules may produce many false positives",
+            "YARA only finds what rules are written for - unknown malware won't match",
+            "Some malware encrypts/encodes strings to evade YARA - consider behavioral analysis too"
+          ],
+          "best_practices": [
+            "Use curated rule sets from reputable sources (YARA-Rules, Florian Roth's signatures)",
+            "Combine generic shellcode detection with specific malware family rules",
+            "Write custom rules for IOCs specific to your incident",
+            "Scan kernel memory too for rootkit detection: --kernel flag",
+            "Save matched offsets for further analysis with hex editors or disassemblers",
+            "Tune rules to reduce false positives in your environment"
+          ],
+          "related_cves": [],
+          "related_topics": ["Malfind", "Malware Analysis", "Threat Intelligence"]
+        }
+      ]
+    },
+    {
+      "id": "file_analysis",
+      "name": "File System Analysis",
+      "topics": [
+        {
+          "title": "File Scanning with filescan",
+          "keywords": ["filescan", "file objects", "FILE_OBJECT", "open files", "file handles", "file carving"],
+          "difficulty": "beginner",
+          "content": "The filescan plugin scans memory for FILE_OBJECT structures, revealing files that were open at the time of memory capture. This includes files that may have been deleted from disk but remain referenced in memory, providing recovery opportunities for critical evidence. The output shows the kernel object offset, file path, and associated information. Key analysis points: look for suspicious files in temp directories, files with unusual extensions, files associated with malicious processes, deleted files still in memory, and files being accessed at unusual times. File paths reveal malware locations, data staging directories, and dropped tools. Combine with dumpfiles to extract file contents when available. For malware analysis, look for: executables in user directories, scripts in temp folders, files with double extensions (.pdf.exe), and files matching known malware naming conventions. Files in Windows\\Temp, Users\\*\\AppData\\Local\\Temp, and Users\\*\\Downloads are high-priority for investigation.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.filescan.FileScan",
+              "explanation": "Scan for all FILE_OBJECT structures in memory",
+              "use_case": "Finding all files open or recently accessed on the system",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  Name\n\n0xfa8019876540  \\Users\\user\\AppData\\Local\\Temp\\payload.exe\n0xfa8019876650  \\Users\\user\\AppData\\Local\\Temp\\mimikatz.exe\n0xfa8019876760  \\Windows\\System32\\config\\SAM\n0xfa8019876870  \\Windows\\System32\\config\\SYSTEM\n0xfa8019876980  \\Windows\\System32\\config\\SECURITY\n0xfa8019876a90  \\Users\\user\\Desktop\\confidential.docx\n0xfa8019876ba0  \\Users\\user\\Desktop\\credentials.txt\n0xfa8019876cb0  \\Windows\\System32\\cmd.exe\n0xfa8019876dc0  \\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\n0xfa8019876ed0  \\Windows\\Prefetch\\MIMIKATZ.EXE-1234ABCD.pf\n0xfa8019876fe0  \\$Recycle.Bin\\S-1-5-21-xxx\\$R123456.exe\n0xfa80198770f0  \\Users\\user\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\persistence.vbs\n0xfa8019877200  \\ProgramData\\Microsoft\\Windows Defender\\Scans\\History\\Results\\Quick\\{GUID}\n0xfa8019877310  \\Windows\\System32\\drivers\\malicious.sys"
+            },
+            {
+              "command": "vol -f memory.dmp windows.filescan.FileScan | findstr -i temp",
+              "explanation": "Filter filescan results to show only files in temp directories (Windows)",
+              "use_case": "Focusing on temporary files commonly used by malware for staging",
+              "output_sample": "0xfa8019876540  \\Users\\user\\AppData\\Local\\Temp\\payload.exe\n0xfa8019876650  \\Users\\user\\AppData\\Local\\Temp\\mimikatz.exe\n0xfa8019877420  \\Users\\user\\AppData\\Local\\Temp\\tmp1234.ps1\n0xfa8019877530  \\Windows\\Temp\\svchost.exe\n0xfa8019877640  \\Users\\user\\AppData\\Local\\Temp\\~$credentials.xlsx"
+            }
+          ],
+          "warnings": [
+            "Not all files in memory can be dumped - some may be partially paged out",
+            "File paths may be truncated for very long paths",
+            "Deleted files may still appear if FILE_OBJECT remains in memory",
+            "Large number of results - use filtering to focus analysis"
+          ],
+          "best_practices": [
+            "Focus on files in Temp, Downloads, AppData, and user-writable directories",
+            "Look for executables and scripts in unexpected locations",
+            "Check for files with suspicious double extensions (.doc.exe, .pdf.scr)",
+            "Cross-reference file offsets with dumpfiles to extract contents",
+            "Look for Prefetch files (.pf) to confirm execution of suspicious programs",
+            "Document all suspicious files for IOC development"
+          ],
+          "related_cves": [],
+          "related_topics": ["DumpFiles", "Timeline Analysis", "Malware Locations"]
+        },
+        {
+          "title": "Extracting Files with dumpfiles",
+          "keywords": ["dumpfiles", "file extraction", "file recovery", "dump files", "DataSectionObject", "ImageSectionObject"],
+          "difficulty": "intermediate",
+          "content": "The dumpfiles plugin extracts file contents from memory, enabling recovery of files that may be deleted from disk, encrypted by ransomware, or otherwise inaccessible. Files in memory exist as memory sections - DataSectionObject for file data and ImageSectionObject for executable images. The plugin can extract files by process (--pid), by physical offset (--physaddr), or by virtual address. Extracted files may be complete or partial depending on whether all pages were in memory at capture time. This is invaluable for recovering: malware executables before they were deleted, exfiltrated documents, encryption keys, and configuration files. For best results, specify the output directory with -o. The plugin attempts to recover the original filename but may fall back to offset-based naming. Extracted executables can be submitted to sandbox analysis or reverse engineered. Extracted documents may contain sensitive data relevant to data breach investigations.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp -o /output/ windows.dumpfiles.DumpFiles --pid 4256",
+              "explanation": "Extract all files associated with suspicious PowerShell process",
+              "use_case": "Recovering malware payloads and scripts executed by malicious process",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nCache   FileObject      FileName        Result\n\nDataSectionObject       0xfa8019876540  payload.exe     file.0xfa8019876540.0xfa801234.DataSectionObject.payload.exe.dat\nImageSectionObject      0xfa8019876dc0  powershell.exe  file.0xfa8019876dc0.0xfa805678.ImageSectionObject.powershell.exe.img\nDataSectionObject       0xfa8019877420  tmp1234.ps1     file.0xfa8019877420.0xfa809abc.DataSectionObject.tmp1234.ps1.dat\nDataSectionObject       0xfa8019877750  config.json     file.0xfa8019877750.0xfa80def0.DataSectionObject.config.json.dat\n\n[FILES SAVED TO: /output/]"
+            },
+            {
+              "command": "vol -f memory.dmp -o /output/ windows.dumpfiles.DumpFiles --physaddr 0xfa8019876540",
+              "explanation": "Extract specific file by its physical offset from filescan",
+              "use_case": "Targeted extraction of identified malware file",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nCache   FileObject      FileName        Result\n\nDataSectionObject       0xfa8019876540  payload.exe     file.0xfa8019876540.0xfa801234.DataSectionObject.payload.exe.dat\n\n[FILE SAVED TO: /output/file.0xfa8019876540.0xfa801234.DataSectionObject.payload.exe.dat]"
+            },
+            {
+              "command": "vol -f memory.dmp -o /evidence/ windows.dumpfiles.DumpFiles",
+              "explanation": "Extract all recoverable files from memory dump",
+              "use_case": "Comprehensive file recovery for incident investigation",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nCache   FileObject      FileName        Result\n\nDataSectionObject       0xfa8019876540  payload.exe     file.payload.exe.dat\nDataSectionObject       0xfa8019876650  mimikatz.exe    file.mimikatz.exe.dat\nDataSectionObject       0xfa8019876a90  confidential.docx       file.confidential.docx.dat\nDataSectionObject       0xfa8019876ba0  credentials.txt file.credentials.txt.dat\nImageSectionObject      0xfa8019876cb0  cmd.exe file.cmd.exe.img\nImageSectionObject      0xfa8019876dc0  powershell.exe  file.powershell.exe.img\nDataSectionObject       0xfa8019877310  malicious.sys   file.malicious.sys.dat\n\n[67 FILES EXTRACTED TO: /evidence/]"
+            }
+          ],
+          "warnings": [
+            "Extracted files may be incomplete if pages were paged out of memory",
+            "Some files may only have ImageSectionObject (code) without DataSectionObject (data)",
+            "Very large files are unlikely to be completely recoverable from memory",
+            "File timestamps are not preserved - use filesystem analysis for timeline"
+          ],
+          "best_practices": [
+            "Create dedicated output directory to organize extracted files",
+            "Hash all extracted files immediately (MD5/SHA256) for documentation",
+            "Submit suspicious executables to VirusTotal or sandbox for analysis",
+            "Check extracted documents for sensitive data in breach investigations",
+            "Preserve chain of custody for extracted evidence",
+            "Compare extracted files against known-good versions when possible"
+          ],
+          "related_cves": [],
+          "related_topics": ["FileScan", "Malware Analysis", "Evidence Recovery"]
+        }
+      ]
+    },
+    {
+      "id": "registry_analysis",
+      "name": "Registry Analysis",
+      "topics": [
+        {
+          "title": "Registry Hive Enumeration",
+          "keywords": ["hivelist", "hivescan", "registry hives", "SAM", "SYSTEM", "SOFTWARE", "NTUSER.DAT", "UsrClass.dat"],
+          "difficulty": "intermediate",
+          "content": "Windows Registry hives contain critical system and user configuration data, and their in-memory representation often contains evidence of malicious activity. The hivelist plugin shows all registry hives loaded in memory with their virtual addresses and file paths. Key hives include: SAM (local accounts and passwords), SECURITY (security policies and LSA secrets), SYSTEM (system configuration, services, drivers), SOFTWARE (installed software and settings), NTUSER.DAT (per-user settings), and UsrClass.dat (user shell settings). Registry analysis reveals: persistence mechanisms (Run keys, Services), malware configuration, user activity traces, recently accessed files, USB device history, and system modifications. The hivescan plugin uses pool scanning to find hives that may be unlinked (hidden by rootkits). Compare hivelist and hivescan results - discrepancies may indicate registry hiding. Each hive is identified by its file path and virtual address, which is needed for printkey operations.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.registry.hivelist.HiveList",
+              "explanation": "List all registry hives loaded in memory with their addresses",
+              "use_case": "Identifying all available registry hives for analysis",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset  FileFullPath\n\n0xfa801a234000  \\REGISTRY\\MACHINE\\SYSTEM\n0xfa801a235000  \\REGISTRY\\MACHINE\\HARDWARE\n0xfa801a236000  \\SystemRoot\\System32\\Config\\SOFTWARE\n0xfa801a237000  \\SystemRoot\\System32\\Config\\DEFAULT\n0xfa801a238000  \\SystemRoot\\System32\\Config\\SECURITY\n0xfa801a239000  \\SystemRoot\\System32\\Config\\SAM\n0xfa801a23a000  \\?\\C:\\Users\\user\\ntuser.dat\n0xfa801a23b000  \\?\\C:\\Users\\user\\AppData\\Local\\Microsoft\\Windows\\UsrClass.dat\n0xfa801a23c000  \\?\\C:\\Users\\Administrator\\ntuser.dat\n0xfa801a23d000  \\SystemRoot\\System32\\Config\\BCD00000000"
+            },
+            {
+              "command": "vol -f memory.dmp windows.registry.hivescan.HiveScan",
+              "explanation": "Scan for registry hives using pool tags - finds unlinked hives",
+              "use_case": "Detecting hidden registry hives that may not appear in hivelist",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nOffset\n\n0xfa801a234000\n0xfa801a235000\n0xfa801a236000\n0xfa801a237000\n0xfa801a238000\n0xfa801a239000\n0xfa801a23a000\n0xfa801a23b000\n0xfa801a23c000\n0xfa801a23d000\n0xfa801a23e000   <- Additional hive not in hivelist - investigate!"
+            }
+          ],
+          "warnings": [
+            "Registry hive addresses are required for printkey operations",
+            "Some hives may be partially paged out of memory",
+            "User hives are only present if user was logged in at time of capture",
+            "Very large hives may not be fully in memory"
+          ],
+          "best_practices": [
+            "Document all hive offsets for use with printkey",
+            "Compare hivelist vs hivescan to detect hidden hives",
+            "Focus on SYSTEM, SOFTWARE, and user NTUSER.DAT for most investigations",
+            "Check for unusual hive file paths that may indicate rogue hives",
+            "Cross-reference hive addresses with process analysis"
+          ],
+          "related_cves": [],
+          "related_topics": ["Registry Keys", "Persistence Detection", "User Activity"]
+        },
+        {
+          "title": "Registry Key Extraction with printkey",
+          "keywords": ["printkey", "registry keys", "registry values", "Run keys", "Services", "persistence"],
+          "difficulty": "intermediate",
+          "content": "The printkey plugin extracts specific registry keys and values from memory, essential for finding persistence mechanisms, system configuration, and evidence of compromise. You specify the hive offset (from hivelist) and the key path. Common investigation targets: Run/RunOnce keys (HKLM and HKCU) for autostart persistence, Services key for malicious services, CurrentVersion\\Image File Execution Options for debugger hijacking, Winlogon keys for shell replacement, AppInit_DLLs for DLL injection, and Explorer\\Shell Folders for startup folder locations. The output shows key last write time, subkeys, and values with their data. Analyze timestamps to correlate with incident timeline - recently modified keys during attack window are high-priority. Check for obfuscated or encoded values, unusual executable paths, and keys referencing temp directories.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.registry.printkey.PrintKey --offset 0xfa801a236000 --key \"Microsoft\\Windows\\CurrentVersion\\Run\"",
+              "explanation": "Check HKLM Run key for persistence mechanisms",
+              "use_case": "Detecting autostart malware in machine Run key",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nLast Write Time:        2024-01-15 09:45:30.000000\nKey:    \\Microsoft\\Windows\\CurrentVersion\\Run\n\nSubkeys:\n        (None)\n\nValues:\nREG_SZ  SecurityHealth  : \"C:\\Windows\\System32\\SecurityHealthSystray.exe\"\nREG_SZ  VMware User Process     : \"C:\\Program Files\\VMware\\VMware Tools\\vmtoolsd.exe\" -n vmusr\nREG_SZ  WindowsDefender : C:\\Users\\user\\AppData\\Local\\Temp\\svchost.exe\nREG_SZ  Updater : powershell.exe -w hidden -enc SQBFAFgAIAAoAE4AZQB3....\n\n[ANALYSIS: Two suspicious entries:\n1. 'WindowsDefender' - runs from Temp, spoofed name\n2. 'Updater' - encoded PowerShell command]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.registry.printkey.PrintKey --offset 0xfa801a234000 --key \"ControlSet001\\Services\"",
+              "explanation": "Enumerate services from SYSTEM hive to find malicious services",
+              "use_case": "Identifying persistence via service installation",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nLast Write Time:        2024-01-15 08:23:15.000000\nKey:    \\ControlSet001\\Services\n\nSubkeys:\n        1394ohci\n        ACPI\n        AeLookupSvc\n        ...\n        MaliciousService        <- INVESTIGATE\n        ...\n        wuauserv\n        WSearch"
+            },
+            {
+              "command": "vol -f memory.dmp windows.registry.printkey.PrintKey --offset 0xfa801a234000 --key \"ControlSet001\\Services\\MaliciousService\"",
+              "explanation": "Examine specific suspicious service configuration",
+              "use_case": "Analyzing malicious service details",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nLast Write Time:        2024-01-15 09:50:00.000000\nKey:    \\ControlSet001\\Services\\MaliciousService\n\nSubkeys:\n        Security\n\nValues:\nREG_DWORD       Type    : 16\nREG_DWORD       Start   : 2\nREG_DWORD       ErrorControl    : 1\nREG_SZ  ImagePath       : C:\\Windows\\Temp\\svc.exe\nREG_SZ  DisplayName     : Windows Update Service\nREG_SZ  ObjectName      : LocalSystem\n\n[ANALYSIS: \n- Start=2 means Auto-Start\n- ImagePath in Temp directory is suspicious\n- DisplayName spoofs legitimate service\n- ObjectName=LocalSystem gives full privileges\nThis is a persistence mechanism!]"
+            },
+            {
+              "command": "vol -f memory.dmp windows.registry.printkey.PrintKey --offset 0xfa801a23a000 --key \"Software\\Microsoft\\Windows\\CurrentVersion\\Run\"",
+              "explanation": "Check user-specific Run key from NTUSER.DAT hive",
+              "use_case": "Finding per-user persistence mechanisms",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nLast Write Time:        2024-01-15 09:46:00.000000\nKey:    \\Software\\Microsoft\\Windows\\CurrentVersion\\Run\n\nSubkeys:\n        (None)\n\nValues:\nREG_SZ  OneDrive        : \"C:\\Users\\user\\AppData\\Local\\Microsoft\\OneDrive\\OneDrive.exe\" /background\nREG_SZ  Discord : \"C:\\Users\\user\\AppData\\Local\\Discord\\Update.exe\" --processStart Discord.exe\nREG_SZ  BackupAgent     : C:\\Users\\user\\AppData\\Roaming\\backup.exe"
+            }
+          ],
+          "warnings": [
+            "Registry paths are case-sensitive in some Volatility versions",
+            "Hive offset from hivelist is required - use correct hive for key type",
+            "Some keys may be partially in memory or corrupted",
+            "Encoded/encrypted values require additional decoding for analysis"
+          ],
+          "best_practices": [
+            "Check both HKLM and HKCU Run keys for persistence",
+            "Examine Services for unusual ImagePath locations",
+            "Look for recently modified keys matching incident timeline",
+            "Decode base64/obfuscated values in PowerShell commands",
+            "Cross-reference service paths with filescan and process analysis",
+            "Document all suspicious keys with timestamps for timeline"
+          ],
+          "related_cves": [],
+          "related_topics": ["HiveList", "Persistence Mechanisms", "Timeline Analysis"]
+        },
+        {
+          "title": "UserAssist Analysis for Execution History",
+          "keywords": ["userassist", "user activity", "program execution", "execution history", "forensic timeline"],
+          "difficulty": "intermediate",
+          "content": "The UserAssist registry keys record program execution history for each user, providing valuable forensic evidence of what programs were run. The data is stored ROT13-encoded in NTUSER.DAT under Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\UserAssist. The userassist plugin decodes this automatically, showing: program path, run count, last execution time, and focus time (how long the application was in foreground). This is crucial for establishing: what the attacker executed, when they ran specific tools, which malware was manually launched, and user activity patterns. Note that UserAssist only tracks GUI applications launched through Explorer - command-line tools and services are not recorded. Recent execution indicates the program was run close to memory capture time. High run counts suggest repeated use. Focus time helps distinguish briefly launched programs from those actively used.",
+          "examples": [
+            {
+              "command": "vol -f memory.dmp windows.registry.userassist.UserAssist",
+              "explanation": "Extract UserAssist data showing program execution history for all users",
+              "use_case": "Building execution timeline and identifying attacker activity",
+              "output_sample": "Volatility 3 Framework 2.5.0\nProgress:  100.00               PDB scanning finished\n\nHive Offset     Hive Name       Program Count   Focus Count     Last Execution  Path\n\n0xfa801a23a000  \\ntuser.dat     5       0       2024-01-15 09:45:15     C:\\Users\\user\\AppData\\Local\\Temp\\mimikatz.exe\n0xfa801a23a000  \\ntuser.dat     12      156     2024-01-15 09:42:00     C:\\Windows\\System32\\cmd.exe\n0xfa801a23a000  \\ntuser.dat     3       45      2024-01-15 09:44:30     C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\n0xfa801a23a000  \\ntuser.dat     1       0       2024-01-15 09:45:00     C:\\Users\\user\\Desktop\\payload.exe\n0xfa801a23a000  \\ntuser.dat     234     12456   2024-01-15 09:40:00     C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\n0xfa801a23a000  \\ntuser.dat     1       5       2024-01-15 09:30:00     C:\\Users\\user\\Downloads\\attachment.exe\n0xfa801a23a000  \\ntuser.dat     89      2345    2024-01-15 09:35:00     C:\\Windows\\explorer.exe\n0xfa801a23a000  \\ntuser.dat     45      890     2024-01-15 09:38:00     C:\\Windows\\System32\\notepad.exe\n\n[ANALYSIS:\n- mimikatz.exe executed 5 times, most recently at 09:45:15 - credential theft!\n- cmd.exe and powershell.exe usage indicates command-line activity\n- payload.exe in Desktop executed once at 09:45:00 - initial malware?\n- attachment.exe from Downloads - possible initial compromise vector]"
+            }
+          ],
+          "warnings": [
+            "UserAssist only tracks GUI programs launched via Explorer",
+            "Command-line-only tools and services are NOT recorded",
+            "Data can be cleared by user or attacker (anti-forensics)",
+            "Only available for users who were logged in at memory capture"
+          ],
+          "best_practices": [
+            "Correlate UserAssist timestamps with other artifacts for timeline",
+            "Look for security tools executed by attacker (mimikatz, procdump)",
+            "Check for programs run from Temp, Downloads, and unusual locations",
+            "Compare run counts - single execution of attack tools is common",
+            "Cross-reference with prefetch and process listing",
+            "Focus time of 0 suggests launched and closed quickly (possibly automated)"
+          ],
+          "related_cves": [],
+          "related_topics": ["Registry Analysis", "Timeline Analysis", "User Activity"]
+        }
+      ]
+    }
+  ]
+}
