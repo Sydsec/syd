@@ -1,5 +1,5 @@
 # Core dependencies for Syd V3
-# Tested on Python 3.8+
+# Python 3.10, 3.11 or 3.12 recommended (3.13 not supported - no llama-cpp-python wheels)
 
 # LLM inference
 llama-cpp-python==0.3.16

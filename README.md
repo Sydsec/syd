@@ -22,7 +22,7 @@ Runs entirely on CPU. Tested on standard laptop hardware.
 - Windows 10/11
 - 16GB RAM minimum (24GB if you want it to be fast)
 - 15GB free disk space (model is ~9.7GB)
-- Python 3.8+
+- Python 3.10, 3.11 or 3.12 (not 3.13 — llama-cpp-python doesn't have pre-built wheels for it yet)
 
 Tested on: AMD Ryzen AI 9 365, 24GB RAM. Query time 2-5 seconds on that hardware. On 16GB it'll work but close everything else first.
 
